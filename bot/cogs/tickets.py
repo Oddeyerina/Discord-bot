@@ -39,49 +39,38 @@ class Tickets(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._done_locks: dict[int, asyncio.Lock] = {}
-        @commands.Cog.listener()
-        async def on_interaction(self, interaction: discord.Interaction) -> None:
-            log.info("DEBUG: interaction type=%s data=%r", interaction.type, interaction.data)
-            if interaction.guild_id != GUILD_ID:
-                log.info("DEBUG: wrong guild: %s != %s", interaction.guild_id, GUILD_ID)
-                return
-            if interaction.type != discord.InteractionType.component:
-                return
-            data = interaction.data
-            if data is None:
-                log.info("DEBUG: data is None")
-                return
-            # data may be a dict OR an InteractionData object
-            custom_id = data.get("custom_id") if hasattr(data, "get") else getattr(data, "custom_id", None)
-            log.info("DEBUG: custom_id=%r", custom_id)
-            if not custom_id:
-                return
-            if custom_id.startswith("ticket:open:"):
-                await self.open_picker(interaction, custom_id)
-            elif custom_id.startswith("ticket:reason:"):
-                await self.create_ticket(interaction, custom_id)
-            elif custom_id == "ticket:claim":
-                await self.claim(interaction)
-            elif custom_id == "ticket:claim:claimed":
-                await interaction.response.send_message("This ticket is already claimed.", ephemeral=True)
-            elif custom_id == "ticket:done":
-                await self.done(interaction)
-            elif custom_id == "ticket:close":
-                await self.close(interaction)
 
-            async def open_picker(self, interaction: discord.Interaction, custom_id: str) -> None:
-                panel_id = int(custom_id.rsplit(":", 1)[1])
-                rows = all_rows("SELECT * FROM ticket_reasons WHERE panel_id = ? AND active = 1 ORDER BY position LIMIT 25", (panel_id,))
-                if not rows:
-                    await interaction.response.send_message("No ticket reasons are configured.", ephemeral=True)
-                    return
-                options = [discord.SelectOption(label=r["label"], value=str(r["id"]),
-                                                description=r["description"][:100] or None,
-                                                emoji=r["emoji"] or None) for r in rows]
-                view = discord.ui.View(timeout=120)
-                view.add_item(discord.ui.Select(placeholder="Choose a reason", options=options,
-                                                custom_id=f"ticket:reason:{panel_id}"))
-                await interaction.response.send_message("Choose a ticket reason:", view=view, ephemeral=True)
+        @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction) -> None:
+        if interaction.guild_id != GUILD_ID or not interaction.data:
+            return
+        custom_id = interaction.data.get("custom_id", "") if hasattr(interaction.data, "get") else getattr(interaction.data, "custom_id", "")
+        if custom_id.startswith("ticket:open:"):
+            await self.open_picker(interaction, custom_id)
+        elif custom_id.startswith("ticket:reason:"):
+            await self.create_ticket(interaction, custom_id)
+        elif custom_id == "ticket:claim":
+            await self.claim(interaction)
+        elif custom_id == "ticket:claim:claimed":
+            await interaction.response.send_message("This ticket is already claimed.", ephemeral=True)
+        elif custom_id == "ticket:done":
+            await self.done(interaction)
+        elif custom_id == "ticket:close":
+            await self.close(interaction)
+
+    async def open_picker(self, interaction: discord.Interaction, custom_id: str) -> None:
+        panel_id = int(custom_id.rsplit(":", 1)[1])
+        rows = all_rows("SELECT * FROM ticket_reasons WHERE panel_id = ? AND active = 1 ORDER BY position LIMIT 25", (panel_id,))
+        if not rows:
+            await interaction.response.send_message("No ticket reasons are configured.", ephemeral=True)
+            return
+        options = [discord.SelectOption(label=r["label"], value=str(r["id"]),
+                                        description=r["description"][:100] or None,
+                                        emoji=r["emoji"] or None) for r in rows]
+        view = discord.ui.View(timeout=120)
+        view.add_item(discord.ui.Select(placeholder="Choose a reason", options=options,
+                                        custom_id=f"ticket:reason:{panel_id}"))
+        await interaction.response.send_message("Choose a ticket reason:", view=view, ephemeral=True)
 
     async def create_ticket(self, interaction: discord.Interaction, custom_id: str) -> None:
         panel_id = int(custom_id.rsplit(":", 1)[1])
