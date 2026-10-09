@@ -1,11 +1,14 @@
 {
   "ExpandedNodes": [
     "",
-    "\\web",
-    "\\web\\app",
+    "\\bot",
+    "\\bot\\cogs",
+    "\\bot\\utils",
     "\\web\\app\\dashboard",
-    "\\web\\app\\login"
+    "\\web\\app\\login",
+    "\\web\\components",
+    "\\web\\hooks"
   ],
-  "SelectedNode": "\\web\\app\\dashboard\\page.tsx",
+  "SelectedNode": "\\bot\\utils\\embeds.py",
   "PreviewInSolutionExplorer": false
 }

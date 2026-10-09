@@ -6,7 +6,7 @@ import discord
 
 def render(template: dict[str, Any], guild: discord.Guild | None = None,
            user: discord.abc.User | None = None, level: int | None = None) -> discord.Embed:
-    values = {"user": user.mention if user else "", "guild": guild.name if guild else "",
+    values = {"user": f"@{user.display_name}" if user else "", "guild": guild.name if guild else "",
               "membercount": str(guild.member_count or 0) if guild else "0",
               "level": str(level or 0)}
 
