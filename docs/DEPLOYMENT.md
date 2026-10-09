@@ -1,0 +1,9 @@
+# Deployment on Proxmox LXC
+
+Install Docker Engine and the Compose plugin inside the LXC, and configure the container so Docker can run. Clone the repository into a persistent directory. Create `.env` from `.env.example`. Choose free host ports using `API_HOST_PORT` and `WEB_HOST_PORT`, then set `NEXT_PUBLIC_API_BASE_URL` to the LXC IP and chosen API port. This browser URL is embedded in the Next.js build, so rebuild the web image after changing it.
+
+Create `data/` and grant UID 10001 write access. Start the stack with `docker compose -f docker-compose.prod.yml up -d --build`. The API becomes healthy before the bot and web start. Inspect logs with `docker compose -f docker-compose.prod.yml logs -f api bot web`.
+
+For updates, run `git pull` and the same `docker compose ... up -d --build` command. For backup, use `sqlite3 data/dcbot.db '.backup backup.db'` while services run, or stop services and copy the database together with any WAL and SHM files. Keep `.env` and backups outside version control.
+
+For remote access, terminate HTTPS with a reverse proxy and limit dashboard access. Set `COOKIE_SECURE=true`. Allow the browser to reach both the web port and API URL. The API CORS origin is derived from the API hostname and `WEB_HOST_PORT`.

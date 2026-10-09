@@ -1,0 +1,7 @@
+# Setup
+
+Create a Discord application and invite the bot to your server with `bot` and `applications.commands` scopes. Enable Server Members Intent and Message Content Intent. Give the bot the permissions needed by the features you enable: View Channels, Send Messages, Embed Links, Read Message History, Add Reactions, Manage Messages, **Create Private Threads**, Send Messages in Threads, Manage Threads, Manage Roles, Kick Members, Ban Members, and Moderate Members. Its role must be above roles it assigns and members it moderates. For ticket notifications, make the support roles mentionable or give the bot permission to mention them.
+
+Copy `.env.example` to `.env` and fill every required value. The dashboard account uses a bcrypt hash, not a plaintext password. `SESSION_SECRET` must contain at least 32 characters. Keep `.env` private. Use HTTPS in front of the web and API services if accessing them beyond a trusted local network, and set `COOKIE_SECURE=true`.
+
+The bot syncs text channels, roles, and custom emojis at startup and every five minutes. If dropdowns are empty immediately after starting, check that the configured guild ID is correct and the bot is in that server. Panel configuration is saved before the publish task is queued. Task status is visible through `/api/tasks` after login.
