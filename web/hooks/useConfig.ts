@@ -25,7 +25,7 @@ export function useConfig<T extends object>(path: string, defaults: T) {
     try {
       await api(path, { method: 'PUT', body: JSON.stringify(value) });
       const result = await api<{ task_id: number }>(`/panels/${kind}/publish`, { method: 'POST' });
-      setMessage(`Panel task #${result.task_id} queued.`);
+        setMessage(`Panel published. It should appear in Discord within a few seconds.`);
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
