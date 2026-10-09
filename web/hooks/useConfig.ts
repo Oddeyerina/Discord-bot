@@ -13,7 +13,7 @@ export function useConfig<T extends object>(path: string, defaults: T) {
     Promise.all([api<T>(path), api<GuildData>('/guild/data')])
       .then(([config, data]) => { setValue({ ...defaults, ...config }); setGuild(data); })
       .catch(e => setError(e.message));
-  }, [path]);
+  }, [path, defaults]);
   async function save() {
     setBusy(true); setError(''); setMessage('');
     try { await api(path, { method: 'PUT', body: JSON.stringify(value) }); setMessage('Saved.'); }

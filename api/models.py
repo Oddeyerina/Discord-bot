@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from database import Base
 
 
+# SQLite stores no timezone offset, so timestamps are treated as UTC on read.
 def now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -70,9 +71,13 @@ class Ticket(Base):
     reason_id: Mapped[int] = mapped_column(ForeignKey("ticket_reasons.id"))
     status: Mapped[str] = mapped_column(String, default="open")
     claimed_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    # SQLite stores no timezone offset; treat this value as UTC on read.
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    # SQLite stores no timezone offset; treat this value as UTC on read.
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # SQLite stores no timezone offset; treat this value as UTC on read.
     pinged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # SQLite stores no timezone offset; treat this value as UTC on read.
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     transcript_path: Mapped[str | None] = mapped_column(String, nullable=True)
 
@@ -128,6 +133,7 @@ class LevelUser(Base):
     user_id: Mapped[str] = mapped_column(String, primary_key=True)
     xp: Mapped[int] = mapped_column(Integer, default=0)
     level: Mapped[int] = mapped_column(Integer, default=0)
+    # SQLite stores no timezone offset; treat this value as UTC on read.
     last_xp_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -149,6 +155,8 @@ class BotTask(Base):
     type: Mapped[str] = mapped_column(String)
     payload_json: Mapped[str] = mapped_column(Text, default="{}")
     status: Mapped[str] = mapped_column(String, default="pending")
+    # SQLite stores no timezone offset; treat this value as UTC on read.
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    # SQLite stores no timezone offset; treat this value as UTC on read.
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

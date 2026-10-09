@@ -7,3 +7,7 @@ __pycache__/
 node_modules/
 .next/
 *.tsbuildinfo
+*.db
+*.db-wal
+*.db-shm
+pnpm-debug.log

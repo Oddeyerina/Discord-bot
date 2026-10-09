@@ -2,8 +2,6 @@ services:
   api:
     build: ./api
     env_file: .env
-    environment:
-      DATABASE_URL: sqlite:////app/data/dcbot.db
     ports:
       - "${API_HOST_PORT}:8000"
     volumes:
@@ -17,8 +15,6 @@ services:
   bot:
     build: ./bot
     env_file: .env
-    environment:
-      DATABASE_URL: sqlite:////app/data/dcbot.db
     volumes:
       - ./data:/app/data
     depends_on:

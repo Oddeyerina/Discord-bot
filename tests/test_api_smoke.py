@@ -19,6 +19,7 @@ def test_api_smoke() -> None:
         os.environ["DISCORD_GUILD_ID"] = "123456789"
         os.environ["NEXT_PUBLIC_API_BASE_URL"] = "http://localhost:8080"
         os.environ["WEB_HOST_PORT"] = "3001"
+        os.environ["WEB_ORIGIN"] = "http://localhost:3001"
         os.environ["DASHBOARD_USER"] = "admin"
         os.environ["DASHBOARD_PASSWORD_HASH"] = bcrypt.hashpw(b"test-password", bcrypt.gensalt()).decode()
         with closing(sqlite3.connect(database_path)) as old_database:
@@ -32,6 +33,13 @@ def test_api_smoke() -> None:
         from database import engine
 
         with TestClient(app) as client:
+            preflight = client.options("/api/tickets/config", headers={
+                "Origin": os.environ["WEB_ORIGIN"],
+                "Access-Control-Request-Method": "PUT",
+                "Access-Control-Request-Headers": "content-type",
+            })
+            assert preflight.status_code == 200
+            assert preflight.headers["access-control-allow-origin"] == os.environ["WEB_ORIGIN"]
             assert client.get("/api/guild/data").status_code == 401
             assert client.post("/api/auth/login", json={"username": "admin", "password": "wrong"}).status_code == 401
             assert client.post("/api/auth/login", json={"username": "admin", "password": "test-password"}).status_code == 200

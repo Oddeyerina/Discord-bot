@@ -1,3 +1,4 @@
+import hmac
 import os
 from typing import Any
 
@@ -37,7 +38,6 @@ def data(db: Session = Depends(get_db)) -> dict[str, Any]:
 @internal_router.post("/guild-sync")
 def sync(body: GuildSync, x_internal_secret: str = Header(default=""),
          db: Session = Depends(get_db)) -> dict[str, bool]:
-    import hmac
     if not hmac.compare_digest(x_internal_secret, os.getenv("SESSION_SECRET", "")) or body.guild_id != guild_id():
         raise HTTPException(status_code=403)
     gid = guild_id()

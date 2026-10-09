@@ -1,4 +1,4 @@
-import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 import discord
@@ -6,6 +6,8 @@ from discord.ext import commands
 
 from config import GUILD_ID
 from db import decoded, settings
+
+log = logging.getLogger(__name__)
 
 
 class Honeypot(commands.Cog):
@@ -32,13 +34,17 @@ class Honeypot(commands.Cog):
             except discord.Forbidden:
                 pass
         action = config["action"]
-        if action == "ban":
-            await member.ban(reason="Honeypot channel triggered")
-        elif action == "timeout":
-            await member.timeout(datetime.now(timezone.utc) + timedelta(seconds=config["timeout_seconds"]),
-                                 reason="Honeypot channel triggered")
-        else:
-            await member.kick(reason="Honeypot channel triggered")
+        try:
+            if action == "ban":
+                await member.ban(reason="Honeypot channel triggered")
+            elif action == "timeout":
+                await member.timeout(datetime.now(timezone.utc) + timedelta(seconds=config["timeout_seconds"]),
+                                     reason="Honeypot channel triggered")
+            else:
+                await member.kick(reason="Honeypot channel triggered")
+        except discord.HTTPException as exc:
+            log.warning("Honeypot %s failed for member %s: %s", action, member.id, exc, exc_info=True)
+            return
         log_channel = member.guild.get_channel(int(config["log_channel_id"])) if config["log_channel_id"] else None
         if isinstance(log_channel, discord.TextChannel):
             embed = discord.Embed(title="Honeypot triggered", color=0xED4245,

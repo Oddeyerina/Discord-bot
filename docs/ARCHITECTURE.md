@@ -7,6 +7,7 @@ Each panel feature stores its embed and target channel in `panels`. Publishing q
 ## Ticket flow
 
 The ticket panel's Open Ticket button sends an ephemeral reason picker. Choosing a reason creates a private thread in the panel's channel. The bot adds the opener and the members holding that reason's support roles. It posts the info embed with persistent Claim and Close buttons, then the follow-up questions, then a persistent Done button. Only the opener can click Done. The bot disables it and pings the configured support roles once; `answered_at` and `pinged_at` record this step. A support member can claim the ticket, which updates the info embed and disables Claim. Closing archives and locks the thread, saves a plaintext transcript, posts it to the configured transcript channel, and marks the ticket closed.
+Claimed tickets use a distinct `ticket:claim:claimed` custom ID for their disabled Claim button. Both claimed and unclaimed views are registered at bot startup, so the disabled state remains correct after restarts.
 
 Discord adds users, rather than roles, as private-thread members. The bot expands the configured support roles to their members when opening the ticket. The same role IDs are used for the notification after Done. Existing SQLite databases receive the `answered_at` and `pinged_at` columns during API startup.
 If support roles change while tickets are open, the API keeps the original reason row for those tickets and creates a new row for future tickets, so the Done ping reaches the members added when each ticket opened.

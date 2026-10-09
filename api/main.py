@@ -1,6 +1,5 @@
 import os
 from contextlib import asynccontextmanager
-from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,14 +20,12 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="dcbot-suite API", lifespan=lifespan)
-origin = os.environ["NEXT_PUBLIC_API_BASE_URL"]
-parsed_origin = urlsplit(origin)
-web_origin = f"{parsed_origin.scheme}://{parsed_origin.hostname}:{os.environ['WEB_HOST_PORT']}"
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[web_origin, "http://localhost:" + os.environ["WEB_HOST_PORT"]],
+    # WEB_ORIGIN must exactly match the browser's dashboard URL so its session cookie is sent.
+    allow_origins=[os.environ["WEB_ORIGIN"]],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 app.include_router(auth.router)

@@ -31,8 +31,10 @@ class FakeTextChannel:
     def __init__(self) -> None:
         self.thread = FakeThread()
         self.thread_type: discord.ChannelType | None = None
+        self.created = 0
 
     async def create_thread(self, **kwargs: object) -> FakeThread:
+        self.created += 1
         self.thread_type = kwargs["type"]
         return self.thread
 
@@ -78,11 +80,15 @@ async def test_creation() -> None:
                     assert ephemeral
 
             class Followup:
+                messages: list[str] = []
+
                 async def send(self, _: str, *, ephemeral: bool) -> None:
                     assert ephemeral
+                    self.messages.append(_)
 
+            followup = Followup()
             interaction = SimpleNamespace(data={"values": ["2"]}, guild=guild, user=opener,
-                                          response=Response(), followup=Followup())
+                                          response=Response(), followup=followup)
             await tickets.Tickets(None).create_ticket(interaction, "ticket:reason:1")
             assert channel.thread_type == discord.ChannelType.private_thread
             assert channel.thread.members == [888, 555, 556]
@@ -91,6 +97,9 @@ async def test_creation() -> None:
             assert [message["content"] for message in messages[1:3]] == ["First?", "Second?"]
             assert messages[3]["view"].children[0].custom_id == "ticket:done"
             assert chunked == [True]
+            await tickets.Tickets(None).create_ticket(interaction, "ticket:reason:1")
+            assert channel.created == 1
+            assert "already have an open ticket" in followup.messages[-1]
         finally:
             tickets.discord.TextChannel = original_channel
 

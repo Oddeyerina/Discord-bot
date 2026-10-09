@@ -20,7 +20,8 @@ def ticket_view(config: dict | None = None, claimed: bool = False) -> discord.ui
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(label=str(config.get("claim_label", "Claim"))[:80],
                                     style=styles.get(config.get("claim_style"), discord.ButtonStyle.primary),
-                                    custom_id="ticket:claim", disabled=claimed))
+                                    custom_id="ticket:claim:claimed" if claimed else "ticket:claim",
+                                    disabled=claimed))
     view.add_item(discord.ui.Button(label=str(config.get("close_label", "Close"))[:80],
                                     style=styles.get(config.get("close_style"), discord.ButtonStyle.danger),
                                     custom_id="ticket:close"))
@@ -50,6 +51,8 @@ class Tickets(commands.Cog):
             await self.create_ticket(interaction, custom_id)
         elif custom_id == "ticket:claim":
             await self.claim(interaction)
+        elif custom_id == "ticket:claim:claimed":
+            await interaction.response.send_message("This ticket is already claimed.", ephemeral=True)
         elif custom_id == "ticket:done":
             await self.done(interaction)
         elif custom_id == "ticket:close":
@@ -83,6 +86,12 @@ class Tickets(commands.Cog):
             await interaction.response.send_message("The ticket channel is unavailable.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
+        existing = one("SELECT thread_id FROM tickets WHERE guild_id = ? AND user_id = ? "
+                       "AND reason_id = ? AND status = 'open' LIMIT 1",
+                       (str(GUILD_ID), str(interaction.user.id), reason["id"]))
+        if existing:
+            await interaction.followup.send(f"You already have an open ticket: <#{existing['thread_id']}>", ephemeral=True)
+            return
         role_ids = dict.fromkeys(decoded(reason["support_role_ids_json"], []))
         roles = [role for role_id in role_ids if (role := interaction.guild.get_role(int(role_id))) is not None]
         if not roles:
@@ -219,7 +228,7 @@ class Tickets(commands.Cog):
             return
         await interaction.response.defer(ephemeral=True)
         lines = []
-        async for message in interaction.channel.history(limit=None, oldest_first=True):
+        async for message in interaction.channel.history(limit=1000, oldest_first=True):
             text = message.content or "[embed or attachment]"
             lines.append(f"{message.created_at.isoformat()} {message.author} ({message.author.id}): {text}")
         transcript = "\n".join(lines)
@@ -242,5 +251,6 @@ class Tickets(commands.Cog):
 
 async def setup(bot: commands.Bot) -> None:
     bot.add_view(ticket_view())
+    bot.add_view(ticket_view(claimed=True))
     bot.add_view(done_view())
     await bot.add_cog(Tickets(bot))

@@ -16,11 +16,12 @@ A private Discord bot suite for one server, managed through a web dashboard. Pha
    Wrap the hash in single quotes in `.env` so Compose preserves its `$` characters.
 4. Generate `SESSION_SECRET` with at least 32 random characters, for example `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 5. Set `NEXT_PUBLIC_API_BASE_URL` to the API address reachable by your browser. Set `API_HOST_PORT` and `WEB_HOST_PORT` to free host ports.
-6. Enable the **Server Members** and **Message Content** intents in the Discord developer portal.
-7. Grant the bot permissions to manage roles, threads, messages, reactions, members, and moderation actions, including **Create Private Threads**. Place its role above roles it must assign. Support roles must be mentionable, or the bot needs permission to mention them.
-8. Make `data/` writable by UID 10001 (`chown -R 10001:10001 data` on the host).
-9. Run `docker compose -f docker-compose.prod.yml up -d --build`.
-10. Open the web dashboard at the configured web host port and log in.
+6. Set `WEB_ORIGIN` to the exact URL the browser uses to reach the dashboard (LXC IP + `WEB_HOST_PORT`). Rebuild the web container after changing `WEB_ORIGIN` or `NEXT_PUBLIC_API_BASE_URL`.
+7. Enable the **Server Members** and **Message Content** intents in the Discord developer portal.
+8. Grant the bot permissions to manage roles, threads, messages, reactions, members, and moderation actions, including **Create Private Threads**. Place its role above roles it must assign. Support roles must be mentionable, or the bot needs permission to mention them.
+9. Make `data/` writable by UID 10001 (`chown -R 10001:10001 data` on the host).
+10. Run `docker compose -f docker-compose.prod.yml up -d --build`.
+11. Open the web dashboard at the configured web host port and log in.
 
 For detailed setup and LXC notes, see [docs/SETUP.md](docs/SETUP.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
@@ -33,9 +34,11 @@ For detailed setup and LXC notes, see [docs/SETUP.md](docs/SETUP.md) and [docs/D
 | `DASHBOARD_USER` | Single admin username |
 | `DASHBOARD_PASSWORD_HASH` | bcrypt password hash |
 | `SESSION_SECRET` | Signed session secret and internal sync credential |
+| `DATABASE_URL` | Shared SQLite database URL for API and bot |
 | `API_HOST_PORT` | Published API host port |
 | `WEB_HOST_PORT` | Published web host port |
 | `API_BASE_URL` | Internal bot-to-API URL; keep `http://api:8000` |
+| `WEB_ORIGIN` | Exact browser URL for the dashboard; used for API CORS and cookies |
 | `NEXT_PUBLIC_API_BASE_URL` | Browser-reachable API URL; set before building web |
 | `COOKIE_SECURE` | Optional: `true` when served over HTTPS |
 

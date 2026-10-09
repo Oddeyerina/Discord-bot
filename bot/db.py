@@ -14,6 +14,7 @@ def connect() -> Iterator[sqlite3.Connection]:
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA busy_timeout=5000")
+    db.execute("PRAGMA foreign_keys=ON")
     try:
         yield db
         db.commit()
