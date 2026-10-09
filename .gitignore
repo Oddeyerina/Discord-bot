@@ -11,3 +11,4 @@ node_modules/
 *.db-wal
 *.db-shm
 pnpm-debug.log
+/.vs/Discord-bot.slnx/FileContentIndex
