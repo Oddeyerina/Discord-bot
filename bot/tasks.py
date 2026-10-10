@@ -79,6 +79,11 @@ async def process_tasks(bot: discord.Client) -> None:
                         await publish_panel(bot, int(decoded(task["payload_json"], {})["panel_id"]))
                     elif task["type"] == "sync_guild_data":
                         await sync_guild_data(bot)
+                    elif task["type"] == "post_sticky":
+                        cog = bot.get_cog("Sticky")
+                        if cog is None:
+                            raise RuntimeError("Sticky cog unavailable")
+                        await cog.post_sticky(str(decoded(task["payload_json"], {})["channel_id"]), force=True)
                     else:
                         raise ValueError("Unknown task type")
                 except Exception as exc:

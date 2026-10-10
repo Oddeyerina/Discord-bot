@@ -54,7 +54,12 @@ async def test_creation() -> None:
             db.execute("CREATE TABLE ticket_reasons (id INTEGER PRIMARY KEY, panel_id INTEGER, active INTEGER, "
                        "label TEXT, support_role_ids_json TEXT, questions_json TEXT)")
             db.execute("CREATE TABLE tickets (id INTEGER PRIMARY KEY, guild_id TEXT, thread_id TEXT, "
-                       "panel_id INTEGER, user_id TEXT, reason_id INTEGER, status TEXT, created_at DATETIME)")
+                       "panel_id INTEGER, user_id TEXT, reason_id INTEGER, priority_id INTEGER, status TEXT, created_at DATETIME)")
+            db.execute("CREATE TABLE ticket_priorities (id INTEGER PRIMARY KEY, guild_id TEXT, active INTEGER, "
+                       "position INTEGER, label TEXT, emoji TEXT, color TEXT)")
+            db.execute("CREATE TABLE ticket_first_replies (ticket_id INTEGER PRIMARY KEY, guild_id TEXT, message_id TEXT)")
+            db.execute("CREATE TABLE ticket_autoresponses (id INTEGER PRIMARY KEY, guild_id TEXT, panel_id INTEGER, "
+                       "trigger_keyword TEXT, response_text TEXT, position INTEGER, enabled INTEGER)")
             db.execute("INSERT INTO panels VALUES (1, '123456789', '999', '{}')")
             db.execute("INSERT INTO ticket_reasons VALUES (2, 1, 1, 'Help', '[\"456\", \"457\"]', '[\"First?\", \"Second?\"]')")
             db.commit()
@@ -76,8 +81,14 @@ async def test_creation() -> None:
             guild = SimpleNamespace(get_channel=lambda _: channel, get_role=roles.get, chunk=chunk)
 
             class Response:
+                picker: object | None = None
+
                 async def defer(self, *, ephemeral: bool) -> None:
                     assert ephemeral
+
+                async def send_message(self, _: str, *, view: object, ephemeral: bool) -> None:
+                    assert ephemeral
+                    self.picker = view
 
             class Followup:
                 messages: list[str] = []
@@ -100,6 +111,34 @@ async def test_creation() -> None:
             await tickets.Tickets(None).create_ticket(interaction, "ticket:reason:1")
             assert channel.created == 1
             assert "already have an open ticket" in followup.messages[-1]
+            with closing(sqlite3.connect(database_path)) as db:
+                db.execute("INSERT INTO ticket_priorities VALUES (3, '123456789', 1, 0, 'High', NULL, '#ff0000')")
+                db.commit()
+            second = SimpleNamespace(data={"values": ["2"]}, guild=guild,
+                                     user=SimpleNamespace(id=889, name="second", mention="<@889>"),
+                                     response=Response(), followup=Followup())
+            await tickets.Tickets(None).create_ticket(second, "ticket:reason:1")
+            assert second.response.picker.children[0].custom_id == "ticket:priority-create:1:2"
+            assert channel.created == 1
+            second.data = {"values": ["3"]}
+            await tickets.Tickets(None).create_ticket(second, "ticket:priority-create:1:2")
+            assert channel.created == 2
+            assert channel.thread.messages[-4]["embed"].fields[0].value == "High"
+            with closing(sqlite3.connect(database_path)) as db:
+                assert db.execute("SELECT priority_id FROM tickets WHERE user_id = '889'").fetchone()[0] == 3
+                db.execute("INSERT INTO ticket_autoresponses VALUES (1, '123456789', 1, 'billing', 'Check your receipt.', 0, 1)")
+                db.commit()
+            first_answer = SimpleNamespace(id=900, guild=SimpleNamespace(id=123456789),
+                                           channel=channel.thread, author=SimpleNamespace(id=888, bot=False),
+                                           content="I need billing help")
+            cog = tickets.Tickets(None)
+            await cog.on_message(first_answer)
+            assert channel.thread.messages[-1]["content"] == "Check your receipt."
+            second_answer = SimpleNamespace(id=901, guild=first_answer.guild, channel=channel.thread,
+                                            author=first_answer.author, content="billing again")
+            count = len(channel.thread.messages)
+            await cog.on_message(second_answer)
+            assert len(channel.thread.messages) == count
         finally:
             tickets.discord.TextChannel = original_channel
 

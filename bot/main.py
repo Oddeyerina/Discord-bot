@@ -23,7 +23,8 @@ class SuiteBot(commands.Bot):
         self.tasks_started = False
 
     async def setup_hook(self) -> None:
-        for cog in ("tickets", "honeypot", "reaction_roles", "levels", "welcome"):
+        for cog in ("tickets", "honeypot", "reaction_roles", "levels", "welcome",
+                    "sticky", "tempvoice", "stickyroles", "remembering"):
             await self.load_extension(f"cogs.{cog}")
         await self.tree.sync(guild=discord.Object(id=GUILD_ID))
 

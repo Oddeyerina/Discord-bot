@@ -1,6 +1,6 @@
 # dcbot-suite
 
-A private Discord bot suite for one server, managed through a web dashboard. Phase 1 includes tickets, honeypot moderation, reaction roles, levels, and welcome/goodbye messages.
+A private Discord bot suite for one server, managed through a web dashboard. Features include tickets, honeypot moderation, reaction roles, levels, welcome/goodbye messages, sticky messages, temporary voice channels, sticky roles, and recurring date announcements.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ A private Discord bot suite for one server, managed through a web dashboard. Pha
 5. Set `NEXT_PUBLIC_API_BASE_URL` to the API address reachable by your browser. Set `API_HOST_PORT` and `WEB_HOST_PORT` to free host ports.
 6. Set `WEB_ORIGIN` to the exact URL the browser uses to reach the dashboard (LXC IP + `WEB_HOST_PORT`). Rebuild the web container after changing `WEB_ORIGIN` or `NEXT_PUBLIC_API_BASE_URL`.
 7. Enable the **Server Members** and **Message Content** intents in the Discord developer portal.
-8. Grant the bot permissions to manage roles, threads, messages, reactions, members, and moderation actions, including **Create Private Threads**. Place its role above roles it must assign. Support roles must be mentionable, or the bot needs permission to mention them.
+8. Grant the bot permissions to manage roles, threads, messages, reactions, members, and moderation actions, including **Create Private Threads** and **Manage Channels** for Temp Voice. It also needs **Move Members** to move users from the hub. Place its role above roles it must assign. Support and sticky ping roles must be mentionable, or the bot needs permission to mention them.
 9. Make `data/` writable by UID 10001 (`chown -R 10001:10001 data` on the host).
 10. Run `docker compose -f docker-compose.prod.yml up -d --build`.
 11. Open the web dashboard at the configured web host port and log in.
@@ -48,7 +48,7 @@ The fastest local workflow is `docker compose up --build`. For direct developmen
 
 ## Manual deployment
 
-On the LXC host, run `git pull` and `docker compose -f docker-compose.prod.yml up -d --build`. There are no automatic updates. Back up `data/dcbot.db` with SQLite's backup command, or stop the services before copying the database and its WAL files.
+On the LXC host, run `git pull`, `docker compose -f docker-compose.prod.yml build --no-cache`, and `docker compose -f docker-compose.prod.yml up -d`. There are no automatic updates. Back up `data/dcbot.db` with SQLite's backup command, or stop the services before copying the database and its WAL files. API startup adds `tickets.priority_id` to existing databases; new feature tables are created automatically. Back up the database before upgrading.
 
 ## First run checklist
 

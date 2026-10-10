@@ -28,8 +28,29 @@ class ReasonInput(BaseModel):
     questions: list[str] = Field(default_factory=list)
 
 
+class PriorityInput(BaseModel):
+    id: int | None = None
+    label: str = Field(min_length=1, max_length=100)
+    emoji: str | None = None
+    color: str = Field(default="#5865F2", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+class AutoresponseInput(BaseModel):
+    trigger_keyword: str = Field(min_length=1, max_length=100)
+    response_text: str = Field(min_length=1, max_length=2000)
+    enabled: bool = True
+
+
+class QuickreplyInput(BaseModel):
+    label: str = Field(min_length=1, max_length=100)
+    response_text: str = Field(min_length=1, max_length=2000)
+
+
 class TicketInput(PanelInput):
     reasons: list[ReasonInput] = Field(default_factory=list, max_length=25)
+    priorities: list[PriorityInput] = Field(default_factory=list, max_length=25)
+    autoresponses: list[AutoresponseInput] = Field(default_factory=list)
+    quickreplies: list[QuickreplyInput] = Field(default_factory=list, max_length=25)
 
 
 class TicketRecord(BaseModel):
@@ -40,6 +61,7 @@ class TicketRecord(BaseModel):
     panel_id: int
     user_id: str
     reason_id: int
+    priority_id: int | None
     status: str
     claimed_by: str | None
     created_at: datetime
@@ -96,5 +118,33 @@ class WelcomeInput(BaseModel):
 
 
 class TaskInput(BaseModel):
-    type: Literal["post_panel", "update_panel", "sync_guild_data"]
+    type: Literal["post_panel", "update_panel", "sync_guild_data", "post_sticky"]
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class StickyInput(BaseModel):
+    channel_id: str
+    role_id: str | None = None
+    sticky_embed: EmbedData = Field(default_factory=EmbedData)
+    cooldown_seconds: int = Field(default=60, ge=0, le=86400)
+    enabled: bool = True
+
+
+class TempVoiceInput(BaseModel):
+    hub_channel_id: str | None = None
+    category_id: str | None = None
+    name_template: str = Field(default="🔊 {user}'s channel", min_length=1, max_length=100)
+    user_limit: int = Field(default=0, ge=0, le=99)
+    enabled: bool = False
+
+
+class StickyRolesInput(BaseModel):
+    excluded_role_ids: list[str] = Field(default_factory=list)
+    enabled: bool = False
+
+
+class RememberingInput(BaseModel):
+    channel_id: str | None = None
+    announcement_embed: EmbedData = Field(default_factory=EmbedData)
+    timezone: str = "Europe/Berlin"
+    enabled: bool = False

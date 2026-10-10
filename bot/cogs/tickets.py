@@ -25,6 +25,10 @@ def ticket_view(config: dict | None = None, claimed: bool = False) -> discord.ui
     view.add_item(discord.ui.Button(label=str(config.get("close_label", "Close"))[:80],
                                     style=styles.get(config.get("close_style"), discord.ButtonStyle.danger),
                                     custom_id="ticket:close"))
+    view.add_item(discord.ui.Button(label="Change priority", style=discord.ButtonStyle.secondary,
+                                    custom_id="ticket:priority-open"))
+    view.add_item(discord.ui.Button(label="Quick Reply", style=discord.ButtonStyle.secondary,
+                                    custom_id="ticket:quick-open"))
     return view
 
 
@@ -40,15 +44,25 @@ class Tickets(commands.Cog):
         self.bot = bot
         self._done_locks: dict[int, asyncio.Lock] = {}
 
-        @commands.Cog.listener()
+    @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction) -> None:
         if interaction.guild_id != GUILD_ID or not interaction.data:
             return
-        custom_id = interaction.data.get("custom_id", "") if hasattr(interaction.data, "get") else getattr(interaction.data, "custom_id", "")
+        custom_id = interaction.data.get("custom_id", "")
         if custom_id.startswith("ticket:open:"):
             await self.open_picker(interaction, custom_id)
         elif custom_id.startswith("ticket:reason:"):
             await self.create_ticket(interaction, custom_id)
+        elif custom_id.startswith("ticket:priority-create:"):
+            await self.create_ticket(interaction, custom_id)
+        elif custom_id == "ticket:priority-open":
+            await self.priority_picker(interaction)
+        elif custom_id.startswith("ticket:priority-change:"):
+            await self.change_priority(interaction, custom_id)
+        elif custom_id == "ticket:quick-open":
+            await self.quick_picker(interaction)
+        elif custom_id.startswith("ticket:quick-send:"):
+            await self.quick_send(interaction, custom_id)
         elif custom_id == "ticket:claim":
             await self.claim(interaction)
         elif custom_id == "ticket:claim:claimed":
@@ -73,14 +87,38 @@ class Tickets(commands.Cog):
         await interaction.response.send_message("Choose a ticket reason:", view=view, ephemeral=True)
 
     async def create_ticket(self, interaction: discord.Interaction, custom_id: str) -> None:
-        panel_id = int(custom_id.rsplit(":", 1)[1])
         values = interaction.data.get("values", [])
+        if not values:
+            await interaction.response.send_message("Choose an option.", ephemeral=True)
+            return
+        priority_id: int | None = None
+        if custom_id.startswith("ticket:priority-create:"):
+            _, _, panel_text, reason_text = custom_id.split(":")
+            panel_id, reason_id, priority_id = int(panel_text), int(reason_text), int(values[0])
+            priority = one("SELECT id FROM ticket_priorities WHERE id = ? AND guild_id = ? AND active = 1",
+                           (priority_id, str(GUILD_ID)))
+            if priority is None:
+                await interaction.response.send_message("That priority is no longer available.", ephemeral=True)
+                return
+        else:
+            panel_id, reason_id = int(custom_id.rsplit(":", 1)[1]), int(values[0])
         reason = one("SELECT * FROM ticket_reasons WHERE id = ? AND panel_id = ? AND active = 1",
-                     (int(values[0]), panel_id)) if values else None
+                     (reason_id, panel_id))
         selected_panel = one("SELECT * FROM panels WHERE id = ? AND guild_id = ?", (panel_id, str(GUILD_ID)))
         if reason is None or selected_panel is None or not interaction.guild:
             await interaction.response.send_message("This ticket option is no longer available.", ephemeral=True)
             return
+        if priority_id is None:
+            priorities = all_rows("SELECT * FROM ticket_priorities WHERE guild_id = ? AND active = 1 ORDER BY position LIMIT 25",
+                                  (str(GUILD_ID),))
+            if priorities:
+                options = [discord.SelectOption(label=p["label"], value=str(p["id"]),
+                                                emoji=p["emoji"] or None) for p in priorities]
+                view = discord.ui.View(timeout=120)
+                view.add_item(discord.ui.Select(placeholder="Choose a priority", options=options,
+                         custom_id=f"ticket:priority-create:{panel_id}:{reason_id}"))
+                await interaction.response.send_message("Choose a ticket priority:", view=view, ephemeral=True)
+                return
         channel = interaction.guild.get_channel(int(selected_panel["channel_id"]))
         if not isinstance(channel, discord.TextChannel):
             await interaction.response.send_message("The ticket channel is unavailable.", ephemeral=True)
@@ -119,6 +157,14 @@ class Tickets(commands.Cog):
                 await thread.add_user(member)
             embed = discord.Embed(title="Ticket", description=f"Opened by {interaction.user.mention}\nReason: {reason['label']}",
                                   timestamp=datetime.now(timezone.utc), color=0x5865F2)
+            if priority_id is not None:
+                selected_priority = one("SELECT label, color FROM ticket_priorities WHERE id = ?", (priority_id,))
+                if selected_priority:
+                    embed.add_field(name="Priority", value=selected_priority["label"])
+                    try:
+                        embed.color = discord.Color(int(selected_priority["color"].lstrip("#"), 16))
+                    except ValueError:
+                        pass
             await thread.send(embed=embed, view=ticket_view(decoded(selected_panel["extra_config_json"], {})))
             for question in decoded(reason["questions_json"], []):
                 await thread.send(str(question))
@@ -133,11 +179,114 @@ class Tickets(commands.Cog):
             await interaction.followup.send("The private ticket could not be created. Please try again.", ephemeral=True)
             return
         with connect() as db:
-            db.execute("INSERT INTO tickets (guild_id, thread_id, panel_id, user_id, reason_id, status, created_at) "
-                       "VALUES (?, ?, ?, ?, ?, 'open', ?)",
-                       (str(GUILD_ID), str(thread.id), panel_id, str(interaction.user.id), reason["id"],
+            db.execute("INSERT INTO tickets (guild_id, thread_id, panel_id, user_id, reason_id, priority_id, status, created_at) "
+                       "VALUES (?, ?, ?, ?, ?, ?, 'open', ?)",
+                       (str(GUILD_ID), str(thread.id), panel_id, str(interaction.user.id), reason["id"], priority_id,
                         datetime.now(timezone.utc).isoformat()))
         await interaction.followup.send(f"Your ticket is ready: {thread.mention}", ephemeral=True)
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message) -> None:
+        if message.guild is None or message.guild.id != GUILD_ID or message.author.bot or not message.content:
+            return
+        ticket = one("SELECT id, panel_id, user_id FROM tickets WHERE guild_id = ? AND thread_id = ? AND status = 'open'",
+                     (str(GUILD_ID), str(message.channel.id)))
+        if ticket is None or ticket["user_id"] != str(message.author.id):
+            return
+        with connect() as db:
+            first = db.execute("INSERT OR IGNORE INTO ticket_first_replies (ticket_id, guild_id, message_id) VALUES (?, ?, ?)",
+                               (ticket["id"], str(GUILD_ID), str(message.id))).rowcount
+        if not first:
+            return
+        replies = all_rows("SELECT * FROM ticket_autoresponses WHERE guild_id = ? AND enabled = 1 "
+                           "AND (panel_id = ? OR panel_id IS NULL) ORDER BY position",
+                           (str(GUILD_ID), ticket["panel_id"]))
+        for reply in replies:
+            if reply["trigger_keyword"].casefold() in message.content.casefold():
+                try:
+                    await message.channel.send(reply["response_text"], allowed_mentions=discord.AllowedMentions.none())
+                except discord.HTTPException:
+                    log.exception("Could not send auto response in ticket %s", ticket["id"])
+
+    async def priority_picker(self, interaction: discord.Interaction) -> None:
+        ticket = one("SELECT * FROM tickets WHERE guild_id = ? AND thread_id = ? AND status = 'open'",
+                     (str(GUILD_ID), str(interaction.channel_id)))
+        if ticket is None or not self.allowed(interaction, ticket):
+            await interaction.response.send_message("Only support staff can change priority.", ephemeral=True)
+            return
+        priorities = all_rows("SELECT * FROM ticket_priorities WHERE guild_id = ? AND active = 1 ORDER BY position LIMIT 25",
+                              (str(GUILD_ID),))
+        if not priorities:
+            await interaction.response.send_message("No priorities are configured.", ephemeral=True)
+            return
+        view = discord.ui.View(timeout=120)
+        view.add_item(discord.ui.Select(placeholder="Choose a priority",
+                    options=[discord.SelectOption(label=p["label"], value=str(p["id"]),
+                                                  emoji=p["emoji"] or None) for p in priorities],
+                    custom_id=f"ticket:priority-change:{ticket['id']}:{interaction.message.id}"))
+        await interaction.response.send_message("Choose a new priority:", view=view, ephemeral=True)
+
+    async def change_priority(self, interaction: discord.Interaction, custom_id: str) -> None:
+        _, _, ticket_text, message_text = custom_id.split(":")
+        ticket = one("SELECT * FROM tickets WHERE id = ? AND guild_id = ? AND status = 'open'",
+                     (int(ticket_text), str(GUILD_ID)))
+        if ticket is None or ticket["thread_id"] != str(interaction.channel_id) or not self.allowed(interaction, ticket) or not interaction.data.get("values"):
+            await interaction.response.send_message("This priority change is unavailable.", ephemeral=True)
+            return
+        priority = one("SELECT * FROM ticket_priorities WHERE id = ? AND guild_id = ? AND active = 1",
+                       (int(interaction.data["values"][0]), str(GUILD_ID)))
+        if priority is None or not isinstance(interaction.channel, discord.Thread):
+            await interaction.response.send_message("Priority unavailable.", ephemeral=True)
+            return
+        try:
+            message = await interaction.channel.fetch_message(int(message_text))
+            embed = message.embeds[0]
+            for index, field in enumerate(embed.fields):
+                if field.name == "Priority":
+                    embed.set_field_at(index, name="Priority", value=priority["label"])
+                    break
+            else:
+                embed.add_field(name="Priority", value=priority["label"])
+            embed.color = discord.Color(int(priority["color"].lstrip("#"), 16))
+            await message.edit(embed=embed)
+        except (discord.HTTPException, ValueError, IndexError):
+            log.exception("Could not change priority for ticket %s", ticket["id"])
+            await interaction.response.send_message("Could not update the ticket embed.", ephemeral=True)
+            return
+        with connect() as db:
+            db.execute("UPDATE tickets SET priority_id = ? WHERE id = ?", (priority["id"], ticket["id"]))
+        await interaction.response.send_message("Priority updated.", ephemeral=True)
+
+    async def quick_picker(self, interaction: discord.Interaction) -> None:
+        ticket = one("SELECT * FROM tickets WHERE guild_id = ? AND thread_id = ? AND status = 'open'",
+                     (str(GUILD_ID), str(interaction.channel_id)))
+        if ticket is None or not self.allowed(interaction, ticket):
+            await interaction.response.send_message("Only support staff can use quick replies.", ephemeral=True)
+            return
+        replies = all_rows("SELECT * FROM ticket_quickreplies WHERE guild_id = ? ORDER BY position LIMIT 25",
+                           (str(GUILD_ID),))
+        if not replies:
+            await interaction.response.send_message("No quick replies are configured.", ephemeral=True)
+            return
+        view = discord.ui.View(timeout=120)
+        view.add_item(discord.ui.Select(placeholder="Choose a quick reply",
+                    options=[discord.SelectOption(label=r["label"], value=str(r["id"])) for r in replies],
+                    custom_id=f"ticket:quick-send:{ticket['id']}"))
+        await interaction.response.send_message("Choose a reply:", view=view, ephemeral=True)
+
+    async def quick_send(self, interaction: discord.Interaction, custom_id: str) -> None:
+        ticket = one("SELECT * FROM tickets WHERE id = ? AND guild_id = ? AND status = 'open'",
+                     (int(custom_id.rsplit(":", 1)[1]), str(GUILD_ID)))
+        if ticket is None or ticket["thread_id"] != str(interaction.channel_id) or not self.allowed(interaction, ticket) or not interaction.data.get("values"):
+            await interaction.response.send_message("Quick reply unavailable.", ephemeral=True)
+            return
+        reply = one("SELECT response_text FROM ticket_quickreplies WHERE id = ? AND guild_id = ?",
+                    (int(interaction.data["values"][0]), str(GUILD_ID)))
+        if reply is None or not isinstance(interaction.channel, discord.Thread):
+            await interaction.response.send_message("Quick reply unavailable.", ephemeral=True)
+            return
+        await interaction.channel.send(reply["response_text"], allowed_mentions=discord.AllowedMentions.none())
+        await interaction.response.send_message("Reply sent.", ephemeral=True)
 
     async def done(self, interaction: discord.Interaction) -> None:
         ticket = one("SELECT * FROM tickets WHERE thread_id = ? AND guild_id = ? AND status = 'open'",
