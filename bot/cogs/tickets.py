@@ -389,8 +389,21 @@ class Tickets(commands.Cog):
         log_id = decoded(selected_panel["extra_config_json"], {}).get("transcript_channel_id") if selected_panel else None
         log_channel = interaction.guild.get_channel(int(log_id)) if log_id and interaction.guild else None
         if isinstance(log_channel, discord.TextChannel):
-            await log_channel.send(f"Transcript for ticket #{ticket['id']}",
-                                   file=discord.File(io.BytesIO(transcript.encode()), filename=path.name))
+            embed = discord.Embed(
+                title=f"Ticket #{ticket['id']} closed",
+                color=0x57F287,
+                timestamp=datetime.now(timezone.utc),
+            )
+            embed.add_field(name="Opened by", value=f"<@{ticket['user_id']}>", inline=True)
+            if ticket["claimed_by"]:
+                embed.add_field(name="Claimed by", value=f"<@{ticket['claimed_by']}>", inline=True)
+            embed.add_field(name="Closed by", value=interaction.user.mention, inline=True)
+            embed.add_field(name="Reason", value=reason["label"] if reason else "Unknown", inline=False)
+            embed.set_footer(text="Transcript attached below")
+            await log_channel.send(
+                embed=embed,
+                file=discord.File(io.BytesIO(transcript.encode()), filename=path.name),
+            )
         with connect() as db:
             db.execute("UPDATE tickets SET status = 'closed', closed_at = ?, transcript_path = ? WHERE id = ?",
                        (datetime.now(timezone.utc).isoformat(), str(path), ticket["id"]))

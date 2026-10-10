@@ -56,7 +56,14 @@ async def publish_panel(bot: discord.Client, panel_id: int) -> None:
             db.execute("UPDATE panels SET message_id = ? WHERE id = ?", (str(message.id), panel_id))
     if panel["type"] == "reactionroles" and decoded(panel["extra_config_json"], {}).get("style") == "reaction":
         for row in all_rows("SELECT emoji FROM reaction_roles WHERE panel_id = ? ORDER BY position", (panel_id,)):
-            await message.add_reaction(row["emoji"])
+    emoji = row["emoji"] or ""
+    if not emoji.strip():
+        log.warning("Skipping empty emoji for panel %s", panel_id)
+        continue
+    try:
+        await message.add_reaction(emoji)
+    except discord.HTTPException:
+        log.warning("Skipping invalid emoji %r for panel %s", emoji, panel_id)
 
 
 async def process_tasks(bot: discord.Client) -> None:

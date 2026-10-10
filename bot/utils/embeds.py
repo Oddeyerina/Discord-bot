@@ -8,7 +8,7 @@ def render(template: dict[str, Any], guild: discord.Guild | None = None,
            user: discord.abc.User | None = None, level: int | None = None,
            label: str = "", age: int | None = None,
            role: discord.Role | None = None) -> discord.Embed:
-    values = {"user": user.mention if user else "", "guild": guild.name if guild else "",
+    values = {"user": f"@{user.display_name}" if user else "", "guild": guild.name if guild else "",
               "membercount": str(guild.member_count or 0) if guild else "0",
               "level": str(level or 0), "label": label, "age": str(age) if age is not None else "",
               "role": role.mention if role else ""}

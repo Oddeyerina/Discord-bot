@@ -133,8 +133,12 @@ class Remembering(commands.Cog):
                 continue
             age = local_today.year - row["date_year"] if row["date_year"] else None
             try:
-                await channel.send(embed=render(decoded(config["announcement_embed_json"], {}),
-                                                guild, user, label=row["label"], age=age))
+                embed = render(decoded(config["announcement_embed_json"], {}), guild, user, label=row["label"], age=age)
+                await channel.send(
+                    content=user.mention,
+                    embed=embed,
+                    allowed_mentions=discord.AllowedMentions(everyone=False, users=[user], roles=False)
+                )
             except discord.HTTPException:
                 with connect() as db:
                     db.execute("DELETE FROM remembered_announcements WHERE date_id = ? AND local_date = ?",
