@@ -49,6 +49,9 @@ class Sticky(commands.Cog):
                     await old.delete()
                 except discord.NotFound:
                     pass
+
+            embed = render(decoded(row["sticky_embed_json"], {}), guild)
+
             role = guild.get_role(int(row["role_id"])) if row["role_id"] else None
 
             if role:

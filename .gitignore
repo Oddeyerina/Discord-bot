@@ -13,3 +13,4 @@ node_modules/
 pnpm-debug.log
 /.vs/Discord-bot.slnx/FileContentIndex
 .vs/
+/.vs
