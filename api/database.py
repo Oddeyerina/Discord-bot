@@ -25,13 +25,15 @@ def configure_sqlite(connection: object, _: object) -> None:
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def migrate_ticket_timestamps() -> None:
-    """Add Phase 1 ticket timestamps to an existing SQLite database."""
+def migrate_ticket_columns() -> None:
+    """Add ticket columns to existing SQLite databases without discarding rows."""
     with engine.begin() as connection:
         columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(tickets)")}
         for name in ("answered_at", "pinged_at"):
             if name not in columns:
                 connection.exec_driver_sql(f"ALTER TABLE tickets ADD COLUMN {name} DATETIME")
+        if "priority_id" not in columns:
+            connection.exec_driver_sql("ALTER TABLE tickets ADD COLUMN priority_id INTEGER REFERENCES ticket_priorities(id)")
 
 
 def get_db() -> Iterator[Session]:

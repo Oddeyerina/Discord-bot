@@ -51,13 +51,22 @@ def test_api_smoke() -> None:
             assert client.get("/api/guild/data").json()["channels"][0]["name"] == "general"
             config = {"channel_id": "987", "embed": {"title": "Tickets"},
                       "extra_config": {"thread_name_pattern": "ticket-{username}"},
-                      "reasons": [{"label": "Help", "questions": ["What happened?"]}]}
+                      "reasons": [{"label": "Help", "questions": ["What happened?"]}],
+                      "priorities": [{"label": "High", "color": "#ff0000"}],
+                      "autoresponses": [{"trigger_keyword": "billing", "response_text": "Check your receipt."}],
+                      "quickreplies": [{"label": "Received", "response_text": "We are looking into it."}]}
             response = client.put("/api/tickets/config", json=config)
             assert response.status_code == 200, response.text
             assert response.json()["reasons"][0]["label"] == "Help"
+            assert response.json()["priorities"][0]["label"] == "High"
+            assert response.json()["autoresponses"][0]["trigger_keyword"] == "billing"
+            assert response.json()["quickreplies"][0]["label"] == "Received"
             with closing(sqlite3.connect(database_path)) as migrated_database:
                 columns = {column[1] for column in migrated_database.execute("PRAGMA table_info(tickets)")}
-                assert {"answered_at", "pinged_at"} <= columns
+                assert {"answered_at", "pinged_at", "priority_id"} <= columns
+                event_columns = {column[1] for column in migrated_database.execute(
+                    "PRAGMA table_info(scheduled_events)")}
+                assert {"guild_id", "start_at", "message_id", "discord_event_id", "created_by"} <= event_columns
                 migrated_database.execute(
                     "INSERT INTO tickets (guild_id, thread_id, panel_id, user_id, reason_id, status, created_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -88,6 +97,15 @@ def test_api_smoke() -> None:
                        "mappings": [{"emoji": "✅", "role_id": "456"}]}).status_code == 200
             assert client.put("/api/levels/config", json={"roles": [{"level": 2, "role_id": "456"}]}).status_code == 200
             assert client.put("/api/welcome/config", json={"autorole_id": "456"}).status_code == 200
+            assert client.put("/api/sticky/config", json={"channels": [{"channel_id": "987", "role_id": "456",
+                           "sticky_embed": {"title": "Notice"}}]}).status_code == 200
+            assert client.post("/api/sticky/post/987").json()["task_id"] > 0
+            assert client.put("/api/tempvoice/config", json={"hub_channel_id": "111", "enabled": True}).status_code == 200
+            assert client.put("/api/sticky-roles/config", json={"excluded_role_ids": ["456"],
+                           "enabled": True}).status_code == 200
+            assert client.put("/api/remembering/config", json={"channel_id": "987",
+                           "timezone": "Europe/Berlin"}).status_code == 200
+            assert client.get("/api/remembering/dates").json() == []
             assert client.get("/api/levels/config").json()["roles"][0]["level"] == 2
             assert client.post("/api/auth/logout").status_code == 200
             assert client.get("/api/auth/me").status_code == 401

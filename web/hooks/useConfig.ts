@@ -16,16 +16,17 @@ export function useConfig<T extends object>(path: string, defaults: T) {
   }, [path, defaults]);
   async function save() {
     setBusy(true); setError(''); setMessage('');
-    try { await api(path, { method: 'PUT', body: JSON.stringify(value) }); setMessage('Saved.'); }
+    try { const saved = await api<T>(path, { method: 'PUT', body: JSON.stringify(value) }); setValue({ ...defaults, ...saved }); setMessage('Saved.'); }
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
   async function publish(kind: string) {
     setBusy(true); setError(''); setMessage('');
     try {
-      await api(path, { method: 'PUT', body: JSON.stringify(value) });
+      const saved = await api<T>(path, { method: 'PUT', body: JSON.stringify(value) });
+      setValue({ ...defaults, ...saved });
       const result = await api<{ task_id: number }>(`/panels/${kind}/publish`, { method: 'POST' });
-        setMessage(`Panel published. It should appear in Discord within a few seconds.`);
+      setMessage(`Panel task #${result.task_id} queued.`);
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }

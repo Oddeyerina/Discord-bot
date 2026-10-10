@@ -1,6 +1,6 @@
 # dcbot-suite
 
-A private Discord bot suite for one server, managed through a web dashboard. Phase 1 includes tickets, honeypot moderation, reaction roles, levels, and welcome/goodbye messages.
+A private Discord bot suite for one server, managed through a web dashboard. Features include tickets, honeypot moderation, reaction roles, levels, welcome/goodbye messages, sticky messages, temporary voice channels, sticky roles, recurring date announcements, polls, and community events.
 
 ## Requirements
 
@@ -18,12 +18,22 @@ A private Discord bot suite for one server, managed through a web dashboard. Pha
 5. Set `NEXT_PUBLIC_API_BASE_URL` to the API address reachable by your browser. Set `API_HOST_PORT` and `WEB_HOST_PORT` to free host ports.
 6. Set `WEB_ORIGIN` to the exact URL the browser uses to reach the dashboard (LXC IP + `WEB_HOST_PORT`). Rebuild the web container after changing `WEB_ORIGIN` or `NEXT_PUBLIC_API_BASE_URL`.
 7. Enable the **Server Members** and **Message Content** intents in the Discord developer portal.
-8. Grant the bot permissions to manage roles, threads, messages, reactions, members, and moderation actions, including **Create Private Threads**. Place its role above roles it must assign. Support roles must be mentionable, or the bot needs permission to mention them.
+8. Grant the bot permissions to manage roles, threads, messages, reactions, members, and moderation actions, including **Create Private Threads** and **Manage Channels** for Temp Voice. It also needs **Move Members** to move users from the hub, **Send Messages** and **Create Polls** for `/poll`, and **Create Events** and **Manage Events** for scheduled events. Place its role above roles it must assign. Support and sticky ping roles must be mentionable, or the bot needs permission to mention them.
 9. Make `data/` writable by UID 10001 (`chown -R 10001:10001 data` on the host).
 10. Run `docker compose -f docker-compose.prod.yml up -d --build`.
 11. Open the web dashboard at the configured web host port and log in.
 
 For detailed setup and LXC notes, see [docs/SETUP.md](docs/SETUP.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Temp Voice commands
+
+Run these in the temporary voice channel while connected to it. `/tempvoice name <name>` renames it (up to 100 characters), `/tempvoice limit <limit>` sets its user limit (0–99; 0 is unlimited), `/tempvoice lock` prevents everyone from connecting, `/tempvoice unlock` lets everyone see and connect to it, and `/tempvoice delete` removes it immediately. These commands require channel ownership. `/tempvoice claim` transfers ownership to a connected member when the current owner is no longer in the channel. Confirmations and errors are private to the command user.
+
+Other member commands are `/rank [user]` (defaults to yourself), `/leaderboard` (top 10 by XP), `/birthday set <day> <month> [label] [year]`, `/birthday remove [label]`, and `/birthday list`. Birthday months appear as English choices; day accepts 1–31 and year accepts 1900–2100, with invalid calendar dates and future years rejected. These replies are private to the command user.
+
+Use `/help` for the full command list. `/userinfo [user]` and `/serverinfo` show private information embeds. `/poll <question> <option1> <option2> [option3…option10] [duration] [multi]` posts a native poll publicly in the current channel. Discord's native poll API requires a whole-hour duration, so selecting the listed 15-minute option gives a private explanation instead of posting a poll.
+
+`/event create <title> <date> <time> [description] [type] [channel] [duration_minutes]` schedules an announcement, a Discord event, or both. Enter the date as `YYYY-MM-DD` and the time as `HH:MM` in Europe/Berlin time. Choose **Message only**, **Discord event only**, or **Both**. Select a channel for **Message only** or **Both**; those types post there publicly. `/event list` shows upcoming events and their IDs, and `/event cancel <id>` lets the creator or an admin cancel one. Command confirmations and errors are private.
 
 ## Environment variables
 
@@ -48,7 +58,7 @@ The fastest local workflow is `docker compose up --build`. For direct developmen
 
 ## Manual deployment
 
-On the LXC host, run `git pull` and `docker compose -f docker-compose.prod.yml up -d --build`. There are no automatic updates. Back up `data/dcbot.db` with SQLite's backup command, or stop the services before copying the database and its WAL files.
+On the LXC host, run `git pull`, `docker compose -f docker-compose.prod.yml build --no-cache`, and `docker compose -f docker-compose.prod.yml up -d`. There are no automatic updates. Back up `data/dcbot.db` with SQLite's backup command, or stop the services before copying the database and its WAL files. API startup adds `tickets.priority_id` to existing databases; new feature tables are created automatically. Back up the database before upgrading.
 
 ## First run checklist
 

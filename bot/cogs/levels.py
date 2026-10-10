@@ -66,21 +66,24 @@ class Levels(commands.Cog):
                 await channel.send(embed=render(template, message.guild, message.author, level))
 
     @app_commands.command(name="rank", description="Show your rank or another member's rank")
+    @app_commands.describe(user="Member to check (default: yourself)")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def rank(self, interaction: discord.Interaction, user: discord.Member | None = None) -> None:
         target = user or interaction.user
         row = one("SELECT * FROM level_users WHERE guild_id = ? AND user_id = ?",
                   (str(GUILD_ID), str(target.id)))
         await interaction.response.send_message(
-            f"{target.mention}: level {row['level'] if row else 0}, {row['xp'] if row else 0} XP")
+            f"**{target.display_name}** — Level {row['level'] if row else 0} — "
+            f"{row['xp'] if row else 0} XP", ephemeral=True)
 
-    @app_commands.command(name="leaderboard", description="Show the top members by XP")
+    @app_commands.command(name="leaderboard", description="Show the top 10 members by XP")
     @app_commands.guilds(discord.Object(id=GUILD_ID))
     async def leaderboard(self, interaction: discord.Interaction) -> None:
         rows = all_rows("SELECT * FROM level_users WHERE guild_id = ? ORDER BY xp DESC LIMIT 10", (str(GUILD_ID),))
-        content = "\n".join(f"{i}. <@{r['user_id']}> — level {r['level']} ({r['xp']} XP)"
-                            for i, r in enumerate(rows, 1)) or "No ranks yet."
-        await interaction.response.send_message(content)
+        content = "\n".join(f"{i}. <@{r['user_id']}> — Level {r['level']} — {r['xp']} XP"
+                            for i, r in enumerate(rows, 1))
+        await interaction.response.send_message(
+            f"**Top 10 members by XP**\n{content}" if content else "No ranks yet.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

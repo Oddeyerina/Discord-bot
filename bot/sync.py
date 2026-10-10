@@ -16,7 +16,8 @@ async def sync_guild_data(bot: discord.Client) -> None:
     payload = {
         "guild_id": str(GUILD_ID),
         "channels": [{"id": str(c.id), "name": c.name, "type": str(c.type)}
-                     for c in guild.channels if isinstance(c, discord.TextChannel)],
+                     for c in guild.channels if isinstance(c, (discord.TextChannel, discord.VoiceChannel,
+                                                              discord.CategoryChannel))],
         "roles": [{"id": str(r.id), "name": r.name, "position": r.position}
                   for r in guild.roles if not r.is_default()],
         "emojis": [{"id": str(e.id), "name": e.name, "animated": e.animated}

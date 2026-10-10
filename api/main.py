@@ -5,9 +5,9 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from auth import require_session
-from database import Base, engine, migrate_ticket_timestamps
+from database import Base, engine, migrate_ticket_columns
 import models  # noqa: F401
-from routers import auth, guild_data, honeypot, levels, panels, reaction_roles, tasks, tickets, welcome
+from routers import auth, guild_data, honeypot, levels, panels, reaction_roles, remembering, sticky, sticky_roles, tasks, tempvoice, tickets, welcome
 
 
 @asynccontextmanager
@@ -15,7 +15,7 @@ async def lifespan(_: FastAPI):
     if len(os.getenv("SESSION_SECRET", "")) < 32:
         raise RuntimeError("SESSION_SECRET must contain at least 32 characters")
     Base.metadata.create_all(engine)
-    migrate_ticket_timestamps()
+    migrate_ticket_columns()
     yield
 
 
@@ -31,7 +31,8 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(guild_data.internal_router)
 for router in (guild_data.router, panels.router, tickets.router, honeypot.router,
-               levels.router, reaction_roles.router, welcome.router, tasks.router):
+               levels.router, reaction_roles.router, welcome.router, sticky.router,
+               tempvoice.router, sticky_roles.router, remembering.router, tasks.router):
     app.include_router(router, dependencies=[Depends(require_session)])
 
 
