@@ -205,6 +205,21 @@ class RememberedAnnouncement(Base):
     __table_args__ = (UniqueConstraint("date_id", "local_date"),)
 
 
+class ScheduledEventRecord(Base):
+    __tablename__ = "scheduled_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    guild_id: Mapped[str] = mapped_column(String, index=True)
+    title: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(Text, default="")
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    message_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    discord_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_by: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class HoneypotConfig(Base):
     __tablename__ = "honeypot_config"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

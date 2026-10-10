@@ -64,6 +64,9 @@ def test_api_smoke() -> None:
             with closing(sqlite3.connect(database_path)) as migrated_database:
                 columns = {column[1] for column in migrated_database.execute("PRAGMA table_info(tickets)")}
                 assert {"answered_at", "pinged_at", "priority_id"} <= columns
+                event_columns = {column[1] for column in migrated_database.execute(
+                    "PRAGMA table_info(scheduled_events)")}
+                assert {"guild_id", "start_at", "message_id", "discord_event_id", "created_by"} <= event_columns
                 migrated_database.execute(
                     "INSERT INTO tickets (guild_id, thread_id, panel_id, user_id, reason_id, status, created_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",

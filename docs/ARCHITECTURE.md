@@ -25,6 +25,12 @@ The guild command tree exposes `/rank [user]` (member to check; defaults to your
 
 Temporary voice owners use `/tempvoice name <name>` (new channel name, 1–100 characters), `/tempvoice limit <limit>` (user limit, 0–99; zero means unlimited), `/tempvoice lock` (deny connect for everyone), `/tempvoice unlock` (allow connect for everyone), and `/tempvoice delete` (delete the channel). A connected member can use `/tempvoice claim` after the owner leaves. These responses are ephemeral.
 
+`/help` reads the guild command tree and groups member commands by feature. `/userinfo [user]` and `/serverinfo` return ephemeral embeds. `/poll <question> <option1> <option2> [option3…option10] [duration] [multi]` posts a native Discord poll publicly in the current channel. Question length is 1–300 characters and each answer is 1–55 characters. Discord's native poll API uses whole-hour durations; the 15-minute choice returns an ephemeral explanation.
+
+`/event create <title> <date> <time> [description] [type] [channel] [duration_minutes]` parses Europe/Berlin local time into UTC. **Message only** posts an announcement embed, **Discord event only** creates an external scheduled event, and **Both** does both with a link in the embed. `scheduled_events` stores both Discord IDs, the creator, and the UTC start; FastAPI creates the table on startup. `/event list` reads upcoming rows and `/event cancel <id>` checks creator or administrator status before deleting the Discord event, marking an announcement cancelled when possible, and removing the row. Public announcements are posted in the selected channel; command confirmations are ephemeral. The bot needs Create Events and Manage Events permissions for Discord scheduled events.
+
+The command tree's global error handler logs unhandled slash-command exceptions and sends ephemeral feedback, including cooldown and permission errors. It uses a follow-up if the command has already acknowledged the interaction.
+
 The API owns feature configuration through authenticated routes. The bot writes runtime rows and timestamps through the shared SQLite file. Voice channels and categories are included in guild data sync for dashboard dropdowns.
 
 Tables include `guild_id` so the schema can support more than one server later. The current API and UI use the configured `DISCORD_GUILD_ID` only. Credentials are a single environment-configured admin account; multi-user auth is outside Phase 1.
