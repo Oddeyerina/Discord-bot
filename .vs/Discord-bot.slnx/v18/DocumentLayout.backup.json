@@ -3,6 +3,14 @@
   "WorkspaceRootPath": "C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\utils\\embeds.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:bot\\utils\\embeds.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\tasks.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:bot\\tasks.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\web\\components\\EmbedEditor.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:web\\components\\EmbedEditor.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
     },
@@ -13,14 +21,6 @@
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\cogs\\remembering.py||{8B382828-6202-11D1-8870-0000F87579D2}",
       "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:bot\\cogs\\remembering.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\tasks.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:bot\\tasks.py||{8B382828-6202-11D1-8870-0000F87579D2}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\utils\\embeds.py||{8B382828-6202-11D1-8870-0000F87579D2}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:bot\\utils\\embeds.py||{8B382828-6202-11D1-8870-0000F87579D2}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\cogs\\sticky.py||{8B382828-6202-11D1-8870-0000F87579D2}",
@@ -78,7 +78,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 6,
+          "SelectedChildIndex": 14,
           "Children": [
             {
               "$type": "Bookmark",
@@ -106,20 +106,20 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
               "Title": "EmbedEditor.tsx",
               "DocumentMoniker": "C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\web\\components\\EmbedEditor.tsx",
               "RelativeDocumentMoniker": "web\\components\\EmbedEditor.tsx",
               "ToolTip": "C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\web\\components\\EmbedEditor.tsx",
               "RelativeToolTip": "web\\components\\EmbedEditor.tsx",
-              "ViewState": "AgIAADsAAAAAAAAAAAAqwHUAAAABAAAAAAAAAA==",
+              "ViewState": "AgIAADsAAAAAAAAAAAAqwFYAAABFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
               "WhenOpened": "2026-10-10T19:54:15.343Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 4,
               "Title": "remembering.py",
               "DocumentMoniker": "C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\cogs\\remembering.py",
               "RelativeDocumentMoniker": "bot\\cogs\\remembering.py",
@@ -132,13 +132,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 1,
               "Title": "tasks.py",
               "DocumentMoniker": "C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\tasks.py",
               "RelativeDocumentMoniker": "bot\\tasks.py",
               "ToolTip": "C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\tasks.py",
               "RelativeToolTip": "bot\\tasks.py",
-              "ViewState": "AgIAACEAAAAAAAAAAAAawEEAAABOAAAAAAAAAA==",
+              "ViewState": "AgIAADcAAAAAAAAAAAAqwGcAAAAeAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
               "WhenOpened": "2026-10-10T19:49:41.116Z",
               "EditorCaption": ""
@@ -210,13 +210,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 0,
               "Title": "embeds.py",
               "DocumentMoniker": "C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\utils\\embeds.py",
               "RelativeDocumentMoniker": "bot\\utils\\embeds.py",
               "ToolTip": "C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\utils\\embeds.py",
               "RelativeToolTip": "bot\\utils\\embeds.py",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAtAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAB4AAAAdAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
               "WhenOpened": "2026-10-09T21:44:01.149Z",
               "EditorCaption": ""
@@ -259,7 +259,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 3,
               "Title": "tickets.py",
               "DocumentMoniker": "C:\\Users\\Jenni\\Documents\\GitHub\\Discord-bot\\bot\\cogs\\tickets.py",
               "RelativeDocumentMoniker": "bot\\cogs\\tickets.py",

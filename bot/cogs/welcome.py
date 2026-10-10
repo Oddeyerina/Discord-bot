@@ -23,7 +23,12 @@ class Welcome(commands.Cog):
                 await member.add_roles(role, reason="Auto role")
         channel = member.guild.get_channel(int(config["welcome_channel_id"])) if config["welcome_channel_id"] else None
         if isinstance(channel, discord.TextChannel):
-            await channel.send(embed=render(decoded(config["welcome_embed_json"], {}), member.guild, member))
+            embed = render(decoded(config["welcome_embed_json"], {}), member.guild, member)
+            await channel.send(
+                content=member.mention,
+                embed=embed,
+                allowed_mentions=discord.AllowedMentions(everyone=False, users=[member], roles=False),
+            )
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member) -> None:
@@ -34,7 +39,12 @@ class Welcome(commands.Cog):
             return
         channel = member.guild.get_channel(int(config["goodbye_channel_id"]))
         if isinstance(channel, discord.TextChannel):
-            await channel.send(embed=render(decoded(config["goodbye_embed_json"], {}), member.guild, member))
+            embed = render(decoded(config["goodbye_embed_json"], {}), member.guild, member)
+            await channel.send(
+                content=member.mention,
+                embed=embed,
+                allowed_mentions=discord.AllowedMentions(everyone=False, users=[member], roles=False),
+            )
 
 
 async def setup(bot: commands.Bot) -> None:
