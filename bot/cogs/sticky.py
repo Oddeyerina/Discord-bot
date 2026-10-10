@@ -50,20 +50,18 @@ class Sticky(commands.Cog):
                 except discord.NotFound:
                     pass
 
-            embed = render(decoded(row["sticky_embed_json"], {}), guild)
-
             role = guild.get_role(int(row["role_id"])) if row["role_id"] else None
 
-            if role:
-                if embed.description:
-                    embed.description = embed.description + "\n\n" + role.mention
-                else:
-                    embed.description = role.mention
-                allowed = discord.AllowedMentions(everyone=False, users=False, roles=[role])
-            else:
-                allowed = discord.AllowedMentions.none()
+            embed = render(decoded(row["sticky_embed_json"], {}), guild, role=role)
 
-            message = await channel.send(embed=embed, allowed_mentions=allowed)
+            if role:
+                allowed = discord.AllowedMentions(everyone=False, users=False, roles=[role])
+                content = role.mention
+            else:
+                allowed = discord.AllowedMentions(everyone=False, users=False, roles=True)
+                content = None
+
+            message = await channel.send(content=content, embed=embed, allowed_mentions=allowed)
 
             with connect() as db:
                 db.execute("UPDATE sticky_channels SET sticky_message_id = ?, last_sticky_at = ? WHERE id = ?",
