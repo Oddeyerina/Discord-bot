@@ -25,6 +25,12 @@ A private Discord bot suite for one server, managed through a web dashboard. Fea
 
 For detailed setup and LXC notes, see [docs/SETUP.md](docs/SETUP.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
+## Temp Voice commands
+
+Run these in the temporary voice channel while connected to it. `/tempvoice name <name>` renames it (up to 100 characters), `/tempvoice limit <limit>` sets its user limit (0–99; 0 is unlimited), `/tempvoice lock` prevents everyone from connecting, `/tempvoice unlock` lets everyone see and connect to it, and `/tempvoice delete` removes it immediately. These commands require channel ownership. `/tempvoice claim` transfers ownership to a connected member when the current owner is no longer in the channel. Confirmations and errors are private to the command user.
+
+Other member commands are `/rank [user]` (defaults to yourself), `/leaderboard` (top 10 by XP), `/birthday set <day> <month> [label] [year]`, `/birthday remove [label]`, and `/birthday list`. Birthday months appear as English choices; day accepts 1–31 and year accepts 1900–2100, with invalid calendar dates and future years rejected. These replies are private to the command user.
+
 ## Environment variables
 
 | Variable | Purpose |

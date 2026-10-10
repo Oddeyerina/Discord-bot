@@ -15,9 +15,15 @@ If support roles change while tickets are open, the API keeps the original reaso
 ## Added features
 
 - Sticky Messages store channel, optional mention role, embed, and cooldown in `sticky_channels`. The bot refreshes a sticky after new human messages; **Sticky now** queues a `post_sticky` task. The current message ID and last post time are runtime fields.
-- Temp Voice stores hub settings in `tempvoice_config` and created channels in `tempvoice_active`. Joining the hub creates a private voice channel and moves the member; an empty temporary channel is removed.
+- Temp Voice stores hub settings in `tempvoice_config` and created channels with their owners in `tempvoice_active`. Joining the hub creates a private voice channel and moves the member; an empty temporary channel is removed. Members use the guild-scoped `/tempvoice` commands from the channel while connected to it. The owner can rename it, change its user limit, lock or unlock public access, and delete it. A connected member can claim ownership only after the current owner leaves; the bot transfers the channel permission overwrite and updates `owner_id`.
 - Sticky Roles records a departing member's assignable roles in `sticky_roles_saved` and restores valid roles on rejoin, excluding configured roles. The saved row remains for future joins.
 - Remembering Dates are entered by members with `/birthday set`, `/birthday remove`, and `/birthday list`. A daily 08:00 UTC check uses the configured IANA timezone and `remembered_announcements` to avoid duplicate posts for the same local day. Announcement embeds support `{user}`, `{label}`, and `{age}` when a year is stored. February 29 is announced only in leap years.
+
+## Member slash commands
+
+The guild command tree exposes `/rank [user]` (member to check; defaults to yourself) and `/leaderboard` (top 10 members by XP). `/birthday set <day> <month> [label] [year]` saves a recurring date: day is 1–31, month is selected from January through December, label defaults to Birthday, and optional year is 1900–2100. `/birthday remove [label]` removes a saved date by label (default Birthday); `/birthday list` shows saved dates. Invalid calendar dates and future years are rejected. All responses are ephemeral.
+
+Temporary voice owners use `/tempvoice name <name>` (new channel name, 1–100 characters), `/tempvoice limit <limit>` (user limit, 0–99; zero means unlimited), `/tempvoice lock` (deny connect for everyone), `/tempvoice unlock` (allow connect for everyone), and `/tempvoice delete` (delete the channel). A connected member can use `/tempvoice claim` after the owner leaves. These responses are ephemeral.
 
 The API owns feature configuration through authenticated routes. The bot writes runtime rows and timestamps through the shared SQLite file. Voice channels and categories are included in guild data sync for dashboard dropdowns.
 

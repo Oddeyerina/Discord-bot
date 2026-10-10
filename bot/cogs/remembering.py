@@ -12,6 +12,8 @@ from db import all_rows, connect, decoded, settings
 from utils.embeds import render
 
 log = logging.getLogger(__name__)
+MONTH_NAMES = ("January", "February", "March", "April", "May", "June",
+               "July", "August", "September", "October", "November", "December")
 
 
 class Remembering(commands.Cog):
@@ -29,15 +31,21 @@ class Remembering(commands.Cog):
             self.daily_task.cancel()
 
     @birthday.command(name="set", description="Save a birthday or recurring date")
-    async def set_date(self, interaction: discord.Interaction, day: int, month: int,
-                       label: str = "Birthday", year: int | None = None) -> None:
+    @app_commands.describe(day="Day of the month (1-31)", month="Month of the date",
+                           label="Label, e.g. 'Birthday' or 'Anniversary'",
+                           year="Optional year (for age calculation)")
+    @app_commands.choices(month=[app_commands.Choice(name=name, value=index)
+                                 for index, name in enumerate(MONTH_NAMES, 1)])
+    async def set_date(self, interaction: discord.Interaction, day: app_commands.Range[int, 1, 31],
+                       month: int, label: str = "Birthday",
+                       year: app_commands.Range[int, 1900, 2100] | None = None) -> None:
         try:
             date(year or 2000, month, day)
         except ValueError:
-            await interaction.response.send_message("Enter a valid date.", ephemeral=True)
+            await interaction.response.send_message("Enter a valid calendar date.", ephemeral=True)
             return
         if year is not None and (year < 1900 or year > datetime.now(timezone.utc).year):
-            await interaction.response.send_message("Enter a valid year.", ephemeral=True)
+            await interaction.response.send_message("The year must be between 1900 and the current year.", ephemeral=True)
             return
         label = label.strip()[:100]
         if not label:
@@ -50,22 +58,33 @@ class Remembering(commands.Cog):
                        "date_year = excluded.date_year, saved_at = excluded.saved_at",
                        (str(GUILD_ID), str(interaction.user.id), day, month, year, label,
                         datetime.now(timezone.utc).isoformat()))
-        await interaction.response.send_message(f"Saved {label} for {day:02d}/{month:02d}.", ephemeral=True)
+        year_part = f" {year}" if year is not None else ""
+        await interaction.response.send_message(
+            f"Saved **{label}** for {day:02d}. {MONTH_NAMES[month - 1]}{year_part}.", ephemeral=True)
 
     @birthday.command(name="remove", description="Remove one of your recurring dates")
+    @app_commands.describe(label="Label of the date to remove")
     async def remove_date(self, interaction: discord.Interaction, label: str = "Birthday") -> None:
         with connect() as db:
-            count = db.execute("DELETE FROM remembered_dates WHERE guild_id = ? AND user_id = ? AND label = ?",
-                               (str(GUILD_ID), str(interaction.user.id), label)).rowcount
-        await interaction.response.send_message("Date removed." if count else "No matching date found.", ephemeral=True)
+            removed = db.execute(
+                "DELETE FROM remembered_dates WHERE guild_id = ? AND user_id = ? AND label = ?",
+                (str(GUILD_ID), str(interaction.user.id), label)).rowcount
+        await interaction.response.send_message(
+            f"Removed **{label}**." if removed else f"No saved date has the label **{label}**.", ephemeral=True)
 
     @birthday.command(name="list", description="List your saved recurring dates")
     async def list_dates(self, interaction: discord.Interaction) -> None:
         rows = all_rows("SELECT * FROM remembered_dates WHERE guild_id = ? AND user_id = ? ORDER BY date_month, date_day",
                         (str(GUILD_ID), str(interaction.user.id)))
-        text = "\n".join(f"{row['label']}: {row['date_day']:02d}/{row['date_month']:02d}"
-                         + (f"/{row['date_year']}" if row["date_year"] else "") for row in rows)
-        await interaction.response.send_message(text or "You have no saved dates.", ephemeral=True)
+        if not rows:
+            await interaction.response.send_message("You have no saved dates.", ephemeral=True)
+            return
+        lines = [
+            f"• **{row['label']}**: {row['date_day']:02d}. {MONTH_NAMES[row['date_month'] - 1]}"
+            + (f" {row['date_year']}" if row["date_year"] else "")
+            for row in rows
+        ]
+        await interaction.response.send_message("Your saved dates:\n" + "\n".join(lines), ephemeral=True)
 
     async def daily_loop(self) -> None:
         await self.bot.wait_until_ready()
