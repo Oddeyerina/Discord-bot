@@ -8,7 +8,7 @@ from config import GUILD_ID
 
 
 POLL_DURATIONS = (
-    ("15 minutes", 15), ("1 hour", 60), ("4 hours", 240), ("8 hours", 480),
+    ("1 hour", 60), ("4 hours", 240), ("8 hours", 480),
     ("1 day", 1440), ("3 days", 4320), ("7 days", 10080),
 )
 

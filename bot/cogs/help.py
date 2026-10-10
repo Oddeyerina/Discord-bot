@@ -37,7 +37,7 @@ class Help(commands.Cog):
                     lines.append(f"`/{path}` — {command.description}")
             if lines:
                 embed.add_field(name=category, value="\n".join(lines), inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot: commands.Bot) -> None:

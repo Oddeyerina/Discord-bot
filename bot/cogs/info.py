@@ -35,7 +35,7 @@ class Info(commands.Cog):
     async def serverinfo(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message("Use this command in the server.", ephemeral=True)
+            await interaction.response.send_message("Use this command in the server.")
             return
         bots = sum(member.bot for member in guild.members)
         humans = len(guild.members) - bots
@@ -53,7 +53,7 @@ class Info(commands.Cog):
                                                  f"{len(guild.categories)} categories"), inline=False)
         embed.add_field(name="Roles", value=str(len(guild.roles)))
         embed.add_field(name="Emojis", value=str(len(guild.emojis)))
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot: commands.Bot) -> None:
