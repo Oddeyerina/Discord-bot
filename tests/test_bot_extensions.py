@@ -21,12 +21,14 @@ async def test_extensions() -> None:
     bot = SuiteBot()
     for cog in ("tickets", "honeypot", "reaction_roles", "levels", "welcome",
                 "sticky", "tempvoice", "stickyroles", "remembering", "help", "info",
-                "poll", "events", "stats"):
+                "poll", "events", "stats", "moderation", "verification"):
         await bot.load_extension(f"cogs.{cog}")
-    assert len(bot.cogs) == 14
+    assert len(bot.cogs) == 16
     guild_commands = {command.name: command for command in bot.tree.get_commands(guild=discord.Object(id=123456789))}
-    assert {"birthday", "rank", "leaderboard", "tempvoice", "help", "userinfo",
-            "serverinfo", "poll", "event"} == guild_commands.keys()
+    assert {"birthday", "rank", "leaderboard", "stats", "tempvoice", "help", "userinfo",
+            "serverinfo", "poll", "event", "warn", "warns", "clearwarns", "mute",
+            "unmute", "ban", "kick", "slowmode", "lock", "unlock", "post-rules"} == guild_commands.keys()
+    assert {command.name for command in guild_commands["leaderboard"].commands} == {"xp", "messages"}
     assert {command.name for command in guild_commands["birthday"].commands} == {"set", "remove", "list"}
     assert {command.name for command in guild_commands["tempvoice"].commands} == {
         "name", "limit", "lock", "unlock", "claim", "delete"}

@@ -2,10 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-slate-950 text-slate-100; }
-input, select, textarea { @apply w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100; }
+html { font-size: 16px; }
+body { @apply bg-slate-950 text-slate-100; line-height: 1.6; }
+input, select, textarea { @apply w-full rounded-lg border border-slate-600 bg-slate-800/60 px-4 py-3 text-slate-100 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/40; font-size: 15px; }
+input[type='checkbox'] { @apply h-4 w-4 p-0 accent-indigo-500; }
+input[type='color'] { @apply h-10 w-14 p-1; }
+textarea { @apply resize-y; }
 button { @apply rounded-lg px-4 py-2 font-medium; }
-label { @apply block space-y-1 text-sm text-slate-300; }
-.card { @apply rounded-xl border border-slate-800 bg-slate-900/70 p-5; }
+label { @apply block space-y-1 text-sm text-slate-100; }
+.card { @apply rounded-xl border border-slate-800 bg-slate-900 p-6; }
 .primary { @apply bg-indigo-500 text-white hover:bg-indigo-400 disabled:opacity-50; }
-.secondary { @apply bg-slate-800 hover:bg-slate-700; }
+.secondary { @apply bg-slate-800 text-slate-100 hover:bg-slate-700; }
+.save-bar { @apply sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/80 p-3 shadow-lg shadow-black/20 backdrop-blur; }

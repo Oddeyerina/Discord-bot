@@ -35,7 +35,8 @@ def all_rows(sql: str, args: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
 
 def settings(table: str) -> dict[str, Any] | None:
     if table not in {"honeypot_config", "level_config", "welcome_config", "tempvoice_config",
-                     "sticky_roles_config", "remembered_dates_config", "stats_config"}:
+                     "sticky_roles_config", "remembered_dates_config", "stats_config",
+                     "moderation_config", "verification_config"}:
         raise ValueError("Unknown settings table")
     return one(f"SELECT * FROM {table} WHERE guild_id = ?", (str(GUILD_ID),))
 
@@ -46,3 +47,15 @@ def panel(kind: str) -> dict[str, Any] | None:
 
 def decoded(value: str | None, fallback: Any = None) -> Any:
     return json.loads(value) if value else fallback
+
+
+def write_bot_heartbeat(last_seen: str, members_online: int | None,
+                        in_voice: int | None, total_members: int | None) -> None:
+    """Persist one compact presence snapshot alongside the existing heartbeat key."""
+    payload = json.dumps({"guild_id": str(GUILD_ID), "members_online": members_online,
+                          "in_voice": in_voice, "total_members": total_members,
+                          "last_seen": last_seen})
+    with connect() as db:
+        db.executemany("INSERT INTO app_meta (id, value) VALUES (?, ?) "
+                       "ON CONFLICT(id) DO UPDATE SET value = excluded.value",
+                       (("bot_last_seen", last_seen), ("bot_heartbeat", payload)))

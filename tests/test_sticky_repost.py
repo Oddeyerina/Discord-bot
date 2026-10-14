@@ -1,11 +1,10 @@
-"""A sticky is pinned once, edited in place, and recreated if deleted."""
+"""Sticky messages are deleted and reposted, never pinned or edited."""
 
 import asyncio
 import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import discord
 
@@ -19,20 +18,15 @@ from cogs import sticky  # noqa: E402
 
 
 class FakeMessage:
-    def __init__(self, message_id: int, pin_fails: bool = False) -> None:
+    def __init__(self, message_id: int) -> None:
         self.id = message_id
-        self.pin_fails = pin_fails
-        self.pins = 0
-        self.edits: list[dict] = []
+        self.deleted = False
+        self.delete_forbidden = False
 
-    async def pin(self, **_: object) -> None:
-        self.pins += 1
-        if self.pin_fails:
-            raise discord.HTTPException(SimpleNamespace(status=400, reason="Bad Request"),
-                                        "Maximum pins reached")
-
-    async def edit(self, **kwargs: object) -> None:
-        self.edits.append(kwargs)
+    async def delete(self) -> None:
+        if self.delete_forbidden:
+            raise discord.Forbidden(SimpleNamespace(status=403, reason="Forbidden"), "Missing Access")
+        self.deleted = True
 
 
 class FakeChannel:
@@ -41,7 +35,7 @@ class FakeChannel:
     def __init__(self) -> None:
         self.messages: dict[int, FakeMessage] = {}
         self.sends: list[dict] = []
-        self.pin_fails = False
+        self.forbidden = False
 
     async def fetch_message(self, message_id: int) -> FakeMessage:
         if message_id not in self.messages:
@@ -49,8 +43,10 @@ class FakeChannel:
         return self.messages[message_id]
 
     async def send(self, **kwargs: object) -> FakeMessage:
+        if self.forbidden:
+            raise discord.Forbidden(SimpleNamespace(status=403, reason="Forbidden"), "Missing Access")
         self.sends.append(kwargs)
-        message = FakeMessage(100 + len(self.sends), self.pin_fails)
+        message = FakeMessage(100 + len(self.sends))
         self.messages[message.id] = message
         return message
 
@@ -69,10 +65,10 @@ class FakeConnection:
         self.row["sticky_message_id"], self.row["last_sticky_at"], _ = values
 
 
-async def test_sticky_pin_edit() -> None:
+async def test_sticky_repost() -> None:
     row = {"id": 1, "enabled": True, "sticky_message_id": None,
            "last_sticky_at": None, "cooldown_seconds": 0,
-           "role_id": "789", "sticky_embed_json": '{"title":"Sticky"}'}
+           "role_id": "789", "sticky_embed_json": '{"title":"Sticky {role}"}'}
     role = SimpleNamespace(id=789, mention="<@&789>")
     channel = FakeChannel()
     guild = SimpleNamespace(name="Test", member_count=1, text_channels=[], forum_channels=[],
@@ -87,26 +83,35 @@ async def test_sticky_pin_edit() -> None:
         cog = sticky.Sticky(bot)
         await cog.post_sticky("456")
         first = channel.messages[101]
-        assert first.pins == 1 and len(channel.sends) == 1
-        assert row["sticky_message_id"] == "101"
+        assert len(channel.sends) == 1 and row["sticky_message_id"] == "101"
+        assert channel.sends[0]["content"] == "<@&789>"
         await cog.post_sticky("456")
-        assert len(channel.sends) == 1 and first.pins == 1 and len(first.edits) == 1
-        assert first.edits[0]["allowed_mentions"].roles is False
-        assert first.edits[0]["allowed_mentions"].users is False
-        await cog.post_sticky("456", force=True, ping_on_edit=True)
-        assert len(first.edits) == 2 and first.edits[1]["allowed_mentions"].roles == [role]
-        del channel.messages[101]
-        channel.pin_fails = True
-        with patch.object(sticky.log, "warning") as warning:
-            await cog.post_sticky("456", force=True)
-            warning.assert_called_once()
-        assert len(channel.sends) == 2 and channel.messages[102].pins == 1
+        assert first.deleted and len(channel.sends) == 2
         assert row["sticky_message_id"] == "102"
+        del channel.messages[102]
+        await cog.post_sticky("456", force=True)
+        assert len(channel.sends) == 3 and row["sticky_message_id"] == "103"
+        channel.messages[103].delete_forbidden = True
+        try:
+            await cog.post_sticky("456", force=True)
+        except ValueError as exc:
+            assert str(exc) == "The bot cannot access this channel. Check permissions."
+        else:
+            raise AssertionError("Failed deletion must not create a duplicate sticky")
+        assert len(channel.sends) == 3
+        channel.messages[103].delete_forbidden = False
+        channel.forbidden = True
+        try:
+            await cog.post_sticky("456", force=True)
+        except ValueError as exc:
+            assert str(exc) == "The bot cannot access this channel. Check permissions."
+        else:
+            raise AssertionError("Inaccessible channel must report a permission error")
     finally:
         sticky.one, sticky.connect = original_one, original_connect
         sticky.discord.TextChannel = original_channel_type
 
 
 if __name__ == "__main__":
-    asyncio.run(test_sticky_pin_edit())
-    print("Sticky pin and edit behavior passed")
+    asyncio.run(test_sticky_repost())
+    print("Sticky repost behavior passed")

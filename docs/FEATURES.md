@@ -44,11 +44,11 @@ The dashboard is the setup interface. Member slash commands are for using featur
 
 ## Sticky Messages
 
-- **What it does:** Pins an embed and edits that message in place after channel activity.
+- **What it does:** Deletes the previous sticky message and posts a new one after channel activity, keeping it at the bottom.
 - **Where to configure it:** `/dashboard/sticky` for each channel, embed, cooldown, and optional role ping.
 - **How to use it in Discord:** Use **Sticky now** for one channel or **Resend all stickies** to refresh every enabled channel.
 - **Required permissions:** View Channels, Send Messages, Embed Links, Manage Messages, and permission to mention the configured role.
-- **Notes / limitations:** `{role}` inserts the selected role mention. The initial post and manual **Resend all stickies** can ping that role; automatic edits do not. If the message is deleted, the bot posts and pins a replacement. If the channel pin limit is reached, the message still posts. One role field currently controls both insertion and pinging.
+- **Notes / limitations:** Deleting and reposting on every update is intentional; sticky messages are not edited or pinned. `{role}` inserts the selected role mention inside the embed. The selected role is also pinged as message content on each repost. If the bot cannot access the channel, saving still works and a posting task reports the permission error.
 
 ## Temp Voice
 
@@ -96,7 +96,7 @@ The dashboard is the setup interface. Member slash commands are for using featur
 - **Where to configure it:** No dashboard settings are needed.
 - **How to use it in Discord:** `/event create <title> <date> <time> [description] [type] [channel] [duration_minutes]`; types are **Message only**, **Discord event only**, and **Both**. Use `/event list` and `/event cancel <id>` to review and cancel.
 - **Required permissions:** View Channels, Send Messages, Embed Links, Create Events, and Manage Events for scheduled events.
-- **Notes / limitations:** Dates use `YYYY-MM-DD` and `HH:MM` in Europe/Berlin. Announcements are public; command confirmations are ephemeral.
+- **Notes / limitations:** Dates accept `YYYY-MM-DD` or `DD.MM.YYYY`; times accept `HH:MM` or `H:MM` in Europe/Berlin. Announcements are public; command confirmations are ephemeral.
 
 ## Stats
 
@@ -131,12 +131,15 @@ Stats embeds additionally support `{total_members}`, `{human_members}`, `{bot_me
 | Server Members Intent | Private ticket support membership, join and leave features, stats |
 | Message Content Intent | XP, honeypot messages, sticky activity, ticket auto responses |
 | Presence Intent | Online member stats |
+| Moderate Members, Kick Members, Ban Members | Moderation commands and warning thresholds |
 
 ## Dashboard pages
 
+The sidebar groups pages under Community, Voice, Moderation, and System. Overview stays at the top. The header shows the current page and a user menu with **Log out**.
+
 | Page | Configuration |
 | --- | --- |
-| `/dashboard` | Overview and recent tasks |
+| `/dashboard` | Live member and ticket tiles, seven-day ticket chart, recent tickets and tasks, optional audit and warning lists, and quick links |
 | `/dashboard/tickets` | Named ticket panels, reasons, priorities, responses, quick replies |
 | `/dashboard/honeypot` | Decoy channel, action, whitelist, logging |
 | `/dashboard/reaction-roles` | Named reaction and select panels |
@@ -147,3 +150,23 @@ Stats embeds additionally support `{total_members}`, `{human_members}`, `{bot_me
 | `/dashboard/sticky-roles` | Role persistence and exclusions |
 | `/dashboard/remembering` | Date announcements and label embeds |
 | `/dashboard/stats` | Live statistics embed and counters |
+| `/dashboard/moderation` | Warning thresholds, moderation logs, warning history |
+| `/dashboard/verification` | Rules panel, verified role, button |
+| `/dashboard/audit` | Recent dashboard changes and filters |
+| `/dashboard/health` | API, database, and bot health details |
+
+The overview refreshes every 30 seconds. Member totals and online counts show `–` when the bot heartbeat is older than 120 seconds. The embed editor previews known channel and role mentions as pills and highlights unresolved mention IDs; the saved embed text is unchanged.
+
+Drop a 512x512 PNG at `web/app/icon.png` for the favicon. Next.js picks it up automatically. Rebuild the web container after replacing it. Next.js also supports `web/app/icon.svg` and `web/app/favicon.ico` if you add either file later.
+
+### Dashboard interaction check
+
+After a web rebuild, open Tickets, Reaction Roles, and Sticky Messages. Open a saved card, close it by clicking its header or **Collapse**, then reopen it. Confirm its settings still appear and Save, Post / Update Panel, and Resend still work. Check that the Overview chart and tiles refresh and that the account menu logs out. The project has no frontend test runner, so this is the manual regression check for the card controls.
+
+## Phase C additions
+
+- **Tickets:** Support staff can assign or unassign tickets, add notes, and view notes privately. Notes are also posted without pings inside the private thread, so thread members can read them. The dashboard configures warning and closure times for inactivity. The close log includes relative dates, duration, assignee, and priority.
+- **Moderation:** `/warn`, `/warns`, `/clearwarns`, `/mute`, `/unmute`, `/ban`, `/kick`, `/slowmode`, `/lock`, and `/unlock` reply ephemerally. Warning thresholds can trigger kick or ban and send an embed to the configured log channel.
+- **Rules verification:** The dashboard publishes an editable rules embed with a persistent agreement button. `/post-rules` works for administrators in the rules channel.
+- **Levels:** Voice XP is granted per minute when at least two humans share an eligible voice channel. `/stats [user]`, `/leaderboard xp`, and `/leaderboard messages` expose member progress.
+- **Stability:** The overview displays API, database, and bot health. The bot requeues interrupted tasks, runs daily SQLite maintenance, and the dashboard records successful changes in its audit log. `scripts/backup-db.sh` creates online backups.

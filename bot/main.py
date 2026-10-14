@@ -6,6 +6,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from config import DISCORD_TOKEN, GUILD_ID
+from runtime import heartbeat_loop, prepare_runtime, recover_guild_state
 from sync import sync_guild_data
 from tasks import process_tasks
 from utils.logger import configure
@@ -44,9 +45,10 @@ class SuiteBot(commands.Bot):
             log.exception("Could not send slash command error response")
 
     async def setup_hook(self) -> None:
+        prepare_runtime()
         for cog in ("tickets", "honeypot", "reaction_roles", "levels", "welcome",
                     "sticky", "tempvoice", "stickyroles", "remembering", "help", "info",
-                    "poll", "events", "stats"):
+                    "poll", "events", "stats", "moderation", "verification"):
             await self.load_extension(f"cogs.{cog}")
         await self.tree.sync(guild=discord.Object(id=GUILD_ID))
 
@@ -54,8 +56,38 @@ class SuiteBot(commands.Bot):
         log.info("Connected as %s", self.user)
         if not self.tasks_started:
             self.tasks_started = True
+            guild = self.get_guild(GUILD_ID)
+            if guild is not None:
+                try:
+                    recover_guild_state(guild)
+                except Exception:
+                    log.exception("Startup state cleanup failed")
             asyncio.create_task(process_tasks(self))
             asyncio.create_task(self.periodic_sync())
+            asyncio.create_task(heartbeat_loop(self))
+
+    async def on_error(self, event_method: str, *args: object, **kwargs: object) -> None:
+        log.exception("Unhandled Discord event error in %s", event_method)
+
+    async def cog_command_error(self, context: commands.Context,
+                                error: commands.CommandError) -> None:
+        await self.on_command_error(context, error)
+
+    async def on_command_error(self, context: commands.Context,
+                               error: commands.CommandError) -> None:
+        log.error("Command failed", exc_info=(type(error), error, error.__traceback__))
+        try:
+            if context.interaction:
+                if context.interaction.response.is_done():
+                    await context.interaction.followup.send(
+                        "Something went wrong. Please try again.", ephemeral=True)
+                else:
+                    await context.interaction.response.send_message(
+                        "Something went wrong. Please try again.", ephemeral=True)
+            else:
+                await context.author.send("Something went wrong. Please try again.")
+        except discord.HTTPException:
+            log.warning("Could not notify user about command error")
 
     async def periodic_sync(self) -> None:
         while not self.is_closed():

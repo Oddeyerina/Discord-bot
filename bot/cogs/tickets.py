@@ -9,11 +9,13 @@ from discord.ext import commands
 
 from config import GUILD_ID
 from db import DB_PATH, all_rows, connect, decoded, one
+from utils.safe import safe_edit, safe_send
 
 log = logging.getLogger(__name__)
 
 
-def ticket_view(config: dict | None = None, claimed: bool = False) -> discord.ui.View:
+def ticket_view(config: dict | None = None, claimed: bool = False,
+                assigned: bool = False) -> discord.ui.View:
     config = config or {}
     styles = {"primary": discord.ButtonStyle.primary, "secondary": discord.ButtonStyle.secondary,
               "success": discord.ButtonStyle.success, "danger": discord.ButtonStyle.danger}
@@ -29,6 +31,14 @@ def ticket_view(config: dict | None = None, claimed: bool = False) -> discord.ui
                                     custom_id="ticket:priority-open"))
     view.add_item(discord.ui.Button(label="Quick Reply", style=discord.ButtonStyle.secondary,
                                     custom_id="ticket:quick-open"))
+    view.add_item(discord.ui.Button(label="Assign to me", style=discord.ButtonStyle.primary,
+                                    custom_id="ticket:assign"))
+    view.add_item(discord.ui.Button(label="Unassign", style=discord.ButtonStyle.secondary,
+                                    custom_id="ticket:unassign", disabled=not assigned))
+    view.add_item(discord.ui.Button(label="Add note", style=discord.ButtonStyle.secondary,
+                                    custom_id="ticket:note-add"))
+    view.add_item(discord.ui.Button(label="View notes", style=discord.ButtonStyle.secondary,
+                                    custom_id="ticket:notes-view"))
     return view
 
 
@@ -37,6 +47,30 @@ def done_view(disabled: bool = False) -> discord.ui.View:
     view.add_item(discord.ui.Button(label="Done", style=discord.ButtonStyle.success,
                                     custom_id="ticket:done", disabled=disabled))
     return view
+
+
+def assignment_field(embed: discord.Embed, assigned_to: str | None,
+                     claimed_by: str | None) -> None:
+    for index in reversed(range(len(embed.fields))):
+        if embed.fields[index].name in {"Assigned to", "Claimed by"}:
+            embed.remove_field(index)
+    if assigned_to:
+        embed.add_field(name="Assigned to", value=f"<@{assigned_to}>", inline=False)
+    elif claimed_by:
+        embed.add_field(name="Claimed by", value=f"<@{claimed_by}>", inline=False)
+
+
+class TicketNoteModal(discord.ui.Modal, title="Add ticket note"):
+    content = discord.ui.TextInput(label="Note", style=discord.TextStyle.paragraph,
+                                   max_length=1800, required=True)
+
+    def __init__(self, cog: "Tickets", ticket_id: int) -> None:
+        super().__init__()
+        self.cog = cog
+        self.ticket_id = ticket_id
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await self.cog.save_note(interaction, self.ticket_id, str(self.content.value))
 
 
 class Tickets(commands.Cog):
@@ -86,9 +120,52 @@ class Tickets(commands.Cog):
                     rows = all_rows("SELECT id, thread_id FROM tickets WHERE guild_id = ? AND status = 'open'",
                                     (str(GUILD_ID),))
                     await self.clean_stale_rows(guild, rows)
+                    await self.sweep_inactive(guild)
             except Exception:
                 log.exception("Stale ticket cleanup failed")
             await asyncio.sleep(3600)
+
+    async def sweep_inactive(self, guild: discord.Guild) -> None:
+        now = datetime.now(timezone.utc)
+        for ticket in all_rows("SELECT * FROM tickets WHERE guild_id = ? AND status = 'open'",
+                               (str(GUILD_ID),)):
+            panel = one("SELECT extra_config_json FROM panels WHERE id = ?", (ticket["panel_id"],))
+            config = decoded(panel["extra_config_json"], {}) if panel else {}
+            inactivity_hours = int(config.get("inactivity_hours", 72))
+            warning_hours = int(config.get("inactivity_warning_hours", 24))
+            if inactivity_hours <= 0:
+                continue
+            try:
+                thread = guild.get_thread(int(ticket["thread_id"]))
+                if thread is None:
+                    thread = await guild.fetch_channel(int(ticket["thread_id"]))
+                if not isinstance(thread, discord.Thread):
+                    continue
+                last = datetime.fromisoformat(ticket["created_at"])
+                if last.tzinfo is None:
+                    last = last.replace(tzinfo=timezone.utc)
+                async for message in thread.history(limit=100):
+                    if not message.author.bot:
+                        last = message.created_at
+                        break
+                idle_hours = (now - last).total_seconds() / 3600
+                if idle_hours >= inactivity_hours:
+                    await self.close_ticket(thread, ticket, "Inactivity timer")
+                elif warning_hours > 0 and idle_hours >= warning_hours and not ticket["last_warned_at"]:
+                    warning = await safe_send(
+                        thread,
+                        content=f"<@{ticket['user_id']}> This ticket will close in about "
+                                f"{max(1, round(inactivity_hours - idle_hours))} hours if there is no reply.",
+                        allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),
+                    )
+                    if warning is not None:
+                        with connect() as db:
+                            db.execute("UPDATE tickets SET last_warned_at = ? WHERE id = ?",
+                                       (now.isoformat(), ticket["id"]))
+            except discord.NotFound:
+                await self.clean_stale_rows(guild, [ticket])
+            except Exception:
+                log.exception("Inactivity check failed for ticket %s", ticket["id"])
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction) -> None:
@@ -117,6 +194,14 @@ class Tickets(commands.Cog):
             await self.done(interaction)
         elif custom_id == "ticket:close":
             await self.close(interaction)
+        elif custom_id == "ticket:assign":
+            await self.assign(interaction)
+        elif custom_id == "ticket:unassign":
+            await self.unassign(interaction)
+        elif custom_id == "ticket:note-add":
+            await self.add_note(interaction)
+        elif custom_id == "ticket:notes-view":
+            await self.view_notes(interaction)
 
     async def open_picker(self, interaction: discord.Interaction, custom_id: str) -> None:
         panel_id = int(custom_id.rsplit(":", 1)[1])
@@ -222,11 +307,14 @@ class Tickets(commands.Cog):
                         embed.color = discord.Color(int(selected_priority["color"].lstrip("#"), 16))
                     except ValueError:
                         pass
-            await thread.send(embed=embed, view=ticket_view(decoded(selected_panel["extra_config_json"], {})))
+            if await safe_send(thread, embed=embed, view=ticket_view(decoded(selected_panel["extra_config_json"], {}))) is None:
+                raise RuntimeError("Could not post ticket info")
             for question in decoded(reason["questions_json"], []):
-                await thread.send(str(question))
-            await thread.send("When you have answered the questions, click Done to notify support.", view=done_view())
-        except discord.HTTPException:
+                if await safe_send(thread, content=str(question)) is None:
+                    raise RuntimeError("Could not post ticket question")
+            if await safe_send(thread, content="When you have answered the questions, click Done to notify support.", view=done_view()) is None:
+                raise RuntimeError("Could not post Done button")
+        except (discord.HTTPException, RuntimeError):
             log.exception("Could not create private ticket for user %s", interaction.user.id)
             if thread is not None:
                 try:
@@ -248,7 +336,11 @@ class Tickets(commands.Cog):
             return
         ticket = one("SELECT id, panel_id, user_id FROM tickets WHERE guild_id = ? AND thread_id = ? AND status = 'open'",
                      (str(GUILD_ID), str(message.channel.id)))
-        if ticket is None or ticket["user_id"] != str(message.author.id):
+        if ticket is None:
+            return
+        with connect() as db:
+            db.execute("UPDATE tickets SET last_warned_at = NULL WHERE id = ?", (ticket["id"],))
+        if ticket["user_id"] != str(message.author.id):
             return
         with connect() as db:
             first = db.execute("INSERT OR IGNORE INTO ticket_first_replies (ticket_id, guild_id, message_id) VALUES (?, ?, ?)",
@@ -261,7 +353,7 @@ class Tickets(commands.Cog):
         for reply in replies:
             if reply["trigger_keyword"].casefold() in message.content.casefold():
                 try:
-                    await message.channel.send(reply["response_text"], allowed_mentions=discord.AllowedMentions.none())
+                    await safe_send(message.channel, content=reply["response_text"], allowed_mentions=discord.AllowedMentions.none())
                 except discord.HTTPException:
                     log.exception("Could not send auto response in ticket %s", ticket["id"])
 
@@ -306,8 +398,9 @@ class Tickets(commands.Cog):
             else:
                 embed.add_field(name="Priority", value=priority["label"])
             embed.color = discord.Color(int(priority["color"].lstrip("#"), 16))
-            await message.edit(embed=embed)
-        except (discord.HTTPException, ValueError, IndexError):
+            if not await safe_edit(message, embed=embed):
+                raise RuntimeError("Could not edit ticket priority")
+        except (discord.HTTPException, RuntimeError, ValueError, IndexError):
             log.exception("Could not change priority for ticket %s", ticket["id"])
             await interaction.response.send_message("Could not update the ticket embed.", ephemeral=True)
             return
@@ -343,7 +436,9 @@ class Tickets(commands.Cog):
         if reply is None or not isinstance(interaction.channel, discord.Thread):
             await interaction.response.send_message("Quick reply unavailable.", ephemeral=True)
             return
-        await interaction.channel.send(reply["response_text"], allowed_mentions=discord.AllowedMentions.none())
+        if await safe_send(interaction.channel, content=reply["response_text"], allowed_mentions=discord.AllowedMentions.none()) is None:
+            await interaction.response.send_message("Could not send the reply.", ephemeral=True)
+            return
         await interaction.response.send_message("Reply sent.", ephemeral=True)
 
     async def done(self, interaction: discord.Interaction) -> None:
@@ -379,14 +474,15 @@ class Tickets(commands.Cog):
             try:
                 await interaction.response.edit_message(view=done_view(disabled=True))
                 mentions = " ".join(role.mention for role in roles)
-                await interaction.channel.send(
-                    f"{mentions} Ticket answers are ready for review.",
+                if await safe_send(interaction.channel,
+                    content=f"{mentions} Ticket answers are ready for review.",
                     allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=roles),
-                )
-            except discord.HTTPException:
+                ) is None:
+                    raise RuntimeError("Could not notify support")
+            except (discord.HTTPException, RuntimeError):
                 if interaction.message:
                     try:
-                        await interaction.message.edit(view=done_view())
+                        await safe_edit(interaction.message, view=done_view())
                     except discord.HTTPException:
                         log.exception("Could not re-enable Done for ticket %s", ticket["id"])
                 if interaction.response.is_done():
@@ -408,6 +504,88 @@ class Tickets(commands.Cog):
         allowed_ids = set(decoded(reason["support_role_ids_json"], [])) if reason else set()
         return any(str(role.id) in allowed_ids for role in interaction.user.roles)
 
+    def support_allowed(self, interaction: discord.Interaction, ticket: dict) -> bool:
+        if not isinstance(interaction.user, discord.Member):
+            return False
+        reason = one("SELECT support_role_ids_json FROM ticket_reasons WHERE id = ?",
+                     (ticket["reason_id"],))
+        ids = set(decoded(reason["support_role_ids_json"], [])) if reason else set()
+        return any(str(role.id) in ids for role in interaction.user.roles)
+
+    async def assign(self, interaction: discord.Interaction) -> None:
+        ticket = one("SELECT * FROM tickets WHERE thread_id = ? AND guild_id = ? AND status = 'open'",
+                     (str(interaction.channel_id), str(GUILD_ID)))
+        if ticket is None or not self.support_allowed(interaction, ticket):
+            await interaction.response.send_message("Only ticket support staff can assign tickets.",
+                                                    ephemeral=True)
+            return
+        with connect() as db:
+            db.execute("UPDATE tickets SET assigned_to = ? WHERE id = ?",
+                       (str(interaction.user.id), ticket["id"]))
+        embed = interaction.message.embeds[0]
+        assignment_field(embed, str(interaction.user.id), ticket["claimed_by"])
+        panel = one("SELECT extra_config_json FROM panels WHERE id = ?", (ticket["panel_id"],))
+        await interaction.response.edit_message(
+            embed=embed, view=ticket_view(decoded(panel["extra_config_json"], {}) if panel else {},
+                                          claimed=bool(ticket["claimed_by"]), assigned=True))
+
+    async def unassign(self, interaction: discord.Interaction) -> None:
+        ticket = one("SELECT * FROM tickets WHERE thread_id = ? AND guild_id = ? AND status = 'open'",
+                     (str(interaction.channel_id), str(GUILD_ID)))
+        if ticket is None or not self.support_allowed(interaction, ticket):
+            await interaction.response.send_message("Only ticket support staff can unassign tickets.",
+                                                    ephemeral=True)
+            return
+        if not ticket["assigned_to"]:
+            await interaction.response.send_message("This ticket is not assigned.", ephemeral=True)
+            return
+        with connect() as db:
+            db.execute("UPDATE tickets SET assigned_to = NULL WHERE id = ?", (ticket["id"],))
+        embed = interaction.message.embeds[0]
+        assignment_field(embed, None, ticket["claimed_by"])
+        panel = one("SELECT extra_config_json FROM panels WHERE id = ?", (ticket["panel_id"],))
+        await interaction.response.edit_message(
+            embed=embed, view=ticket_view(decoded(panel["extra_config_json"], {}) if panel else {},
+                                          claimed=bool(ticket["claimed_by"]), assigned=False))
+
+    async def add_note(self, interaction: discord.Interaction) -> None:
+        ticket = one("SELECT * FROM tickets WHERE thread_id = ? AND guild_id = ? AND status = 'open'",
+                     (str(interaction.channel_id), str(GUILD_ID)))
+        if ticket is None or not self.support_allowed(interaction, ticket):
+            await interaction.response.send_message("Only ticket support staff can add notes.",
+                                                    ephemeral=True)
+            return
+        await interaction.response.send_modal(TicketNoteModal(self, ticket["id"]))
+
+    async def save_note(self, interaction: discord.Interaction, ticket_id: int, content: str) -> None:
+        ticket = one("SELECT * FROM tickets WHERE id = ? AND thread_id = ? AND status = 'open'",
+                     (ticket_id, str(interaction.channel_id)))
+        if ticket is None or not self.support_allowed(interaction, ticket):
+            await interaction.response.send_message("This ticket note is unavailable.", ephemeral=True)
+            return
+        with connect() as db:
+            db.execute("INSERT INTO ticket_notes (ticket_id, author_id, content, created_at) "
+                       "VALUES (?, ?, ?, ?)",
+                       (ticket_id, str(interaction.user.id), content,
+                        datetime.now(timezone.utc).isoformat()))
+        await safe_send(interaction.channel, content=f"[NOTE] {interaction.user.mention}: {content}",
+                        allowed_mentions=discord.AllowedMentions.none())
+        await interaction.response.send_message("Note saved.", ephemeral=True)
+
+    async def view_notes(self, interaction: discord.Interaction) -> None:
+        ticket = one("SELECT * FROM tickets WHERE thread_id = ? AND guild_id = ?",
+                     (str(interaction.channel_id), str(GUILD_ID)))
+        if ticket is None or not self.support_allowed(interaction, ticket):
+            await interaction.response.send_message("Only ticket support staff can view notes.",
+                                                    ephemeral=True)
+            return
+        notes = all_rows("SELECT * FROM ticket_notes WHERE ticket_id = ? ORDER BY id DESC LIMIT 20",
+                         (ticket["id"],))
+        content = "\n".join(f"<@{note['author_id']}>: {note['content'][:150]}"
+                            for note in notes) or "No notes yet."
+        await interaction.response.send_message(content[:1900], ephemeral=True,
+                                                allowed_mentions=discord.AllowedMentions.none())
+
     async def claim(self, interaction: discord.Interaction) -> None:
         ticket = one("SELECT * FROM tickets WHERE thread_id = ? AND status = 'open'", (str(interaction.channel_id),))
         if ticket is None or not self.allowed(interaction, ticket):
@@ -420,10 +598,72 @@ class Tickets(commands.Cog):
             db.execute("UPDATE tickets SET claimed_by = ? WHERE id = ? AND claimed_by IS NULL",
                        (str(interaction.user.id), ticket["id"]))
         embed = interaction.message.embeds[0] if interaction.message and interaction.message.embeds else discord.Embed(title="Ticket")
-        embed.add_field(name="Claimed by", value=interaction.user.mention)
+        assignment_field(embed, ticket.get("assigned_to"), str(interaction.user.id))
         selected_panel = one("SELECT extra_config_json FROM panels WHERE id = ?", (ticket["panel_id"],))
         config = decoded(selected_panel["extra_config_json"], {}) if selected_panel else {}
-        await interaction.response.edit_message(embed=embed, view=ticket_view(config, claimed=True))
+        await interaction.response.edit_message(
+            embed=embed, view=ticket_view(config, claimed=True,
+                                          assigned=bool(ticket.get("assigned_to"))))
+
+    async def close_ticket(self, thread: discord.Thread, ticket: dict,
+                           closed_by: str) -> None:
+        closed_at = datetime.now(timezone.utc)
+        lines = []
+        try:
+            async for message in thread.history(limit=1000, oldest_first=True):
+                text = message.content or "[embed or attachment]"
+                lines.append(f"{message.created_at.isoformat()} {message.author} ({message.author.id}): {text}")
+        except discord.HTTPException:
+            log.warning("Could not read full transcript for ticket %s", ticket["id"])
+        notes = all_rows("SELECT * FROM ticket_notes WHERE ticket_id = ? ORDER BY id",
+                         (ticket["id"],))
+        if notes:
+            lines.append("\nInternal notes:")
+            lines.extend(f"{note['created_at']} {note['author_id']}: {note['content']}" for note in notes)
+        transcript = "\n".join(lines)
+        transcript_dir = Path(DB_PATH).parent / "transcripts"
+        transcript_dir.mkdir(parents=True, exist_ok=True)
+        path = transcript_dir / f"ticket-{ticket['id']}.txt"
+        path.write_text(transcript, encoding="utf-8")
+        selected_panel = one("SELECT extra_config_json FROM panels WHERE id = ?", (ticket["panel_id"],))
+        reason = one("SELECT label FROM ticket_reasons WHERE id = ?", (ticket["reason_id"],))
+        log_id = decoded(selected_panel["extra_config_json"], {}).get("transcript_channel_id") if selected_panel else None
+        log_channel = thread.guild.get_channel(int(log_id)) if log_id else None
+        if isinstance(log_channel, discord.TextChannel):
+            opened_at = datetime.fromisoformat(ticket["created_at"])
+            if opened_at.tzinfo is None:
+                opened_at = opened_at.replace(tzinfo=timezone.utc)
+            priority = (one("SELECT label FROM ticket_priorities WHERE id = ?",
+                            (ticket["priority_id"],)) if ticket.get("priority_id") else None)
+            embed = discord.Embed(
+                title=f"Ticket #{ticket['id']} closed",
+                color=0x57F287,
+                timestamp=closed_at,
+            )
+            embed.add_field(name="Opened by", value=f"<@{ticket['user_id']}>", inline=True)
+            if ticket.get("assigned_to"):
+                embed.add_field(name="Assignee", value=f"<@{ticket['assigned_to']}>", inline=True)
+            elif ticket["claimed_by"]:
+                embed.add_field(name="Claimed by", value=f"<@{ticket['claimed_by']}>", inline=True)
+            embed.add_field(name="Closed by", value=closed_by, inline=True)
+            embed.add_field(name="Reason", value=reason["label"] if reason else "Unknown", inline=False)
+            embed.add_field(name="Opened at", value=f"<t:{int(opened_at.timestamp())}:R>")
+            embed.add_field(name="Closed at", value=f"<t:{int(closed_at.timestamp())}:R>")
+            embed.add_field(name="Duration", value=str(closed_at - opened_at).split(".")[0])
+            if priority:
+                embed.add_field(name="Priority", value=priority["label"])
+            embed.set_footer(text="Transcript attached below")
+            await safe_send(log_channel,
+                embed=embed,
+                file=discord.File(io.BytesIO(transcript.encode()), filename=path.name),
+            )
+        with connect() as db:
+            db.execute("UPDATE tickets SET status = 'closed', closed_at = ?, transcript_path = ? WHERE id = ?",
+                       (closed_at.isoformat(), str(path), ticket["id"]))
+        try:
+            await thread.edit(archived=True, locked=True)
+        except discord.HTTPException:
+            log.warning("Could not archive ticket thread %s", thread.id)
 
     async def close(self, interaction: discord.Interaction) -> None:
         ticket = one("SELECT * FROM tickets WHERE thread_id = ? AND status = 'open'", (str(interaction.channel_id),))
@@ -434,44 +674,14 @@ class Tickets(commands.Cog):
             await interaction.response.send_message("Ticket thread unavailable.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
-        lines = []
-        async for message in interaction.channel.history(limit=1000, oldest_first=True):
-            text = message.content or "[embed or attachment]"
-            lines.append(f"{message.created_at.isoformat()} {message.author} ({message.author.id}): {text}")
-        transcript = "\n".join(lines)
-        transcript_dir = Path(DB_PATH).parent / "transcripts"
-        transcript_dir.mkdir(parents=True, exist_ok=True)
-        path = transcript_dir / f"ticket-{ticket['id']}.txt"
-        path.write_text(transcript, encoding="utf-8")
-        selected_panel = one("SELECT extra_config_json FROM panels WHERE id = ?", (ticket["panel_id"],))
-        reason = one("SELECT label FROM ticket_reasons WHERE id = ?", (ticket["reason_id"],))
-        log_id = decoded(selected_panel["extra_config_json"], {}).get("transcript_channel_id") if selected_panel else None
-        log_channel = interaction.guild.get_channel(int(log_id)) if log_id and interaction.guild else None
-        if isinstance(log_channel, discord.TextChannel):
-            embed = discord.Embed(
-                title=f"Ticket #{ticket['id']} closed",
-                color=0x57F287,
-                timestamp=datetime.now(timezone.utc),
-            )
-            embed.add_field(name="Opened by", value=f"<@{ticket['user_id']}>", inline=True)
-            if ticket["claimed_by"]:
-                embed.add_field(name="Claimed by", value=f"<@{ticket['claimed_by']}>", inline=True)
-            embed.add_field(name="Closed by", value=interaction.user.mention, inline=True)
-            embed.add_field(name="Reason", value=reason["label"] if reason else "Unknown", inline=False)
-            embed.set_footer(text="Transcript attached below")
-            await log_channel.send(
-                embed=embed,
-                file=discord.File(io.BytesIO(transcript.encode()), filename=path.name),
-            )
-        with connect() as db:
-            db.execute("UPDATE tickets SET status = 'closed', closed_at = ?, transcript_path = ? WHERE id = ?",
-                       (datetime.now(timezone.utc).isoformat(), str(path), ticket["id"]))
-        await interaction.channel.edit(archived=True, locked=True)
+        await self.close_ticket(interaction.channel, ticket, interaction.user.mention)
         await interaction.followup.send("Ticket closed.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:
     bot.add_view(ticket_view())
     bot.add_view(ticket_view(claimed=True))
+    bot.add_view(ticket_view(assigned=True))
+    bot.add_view(ticket_view(claimed=True, assigned=True))
     bot.add_view(done_view())
     await bot.add_cog(Tickets(bot))

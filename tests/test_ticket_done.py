@@ -16,6 +16,7 @@ class FakeThread:
 
     async def send(self, content: str, **_: object) -> None:
         self.messages.append(content)
+        return SimpleNamespace(id=len(self.messages))
 
 
 class FakeResponse:

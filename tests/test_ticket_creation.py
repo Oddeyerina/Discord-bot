@@ -25,6 +25,7 @@ class FakeThread:
 
     async def send(self, content: str | None = None, **kwargs: object) -> None:
         self.messages.append({"content": content, **kwargs})
+        return SimpleNamespace(id=len(self.messages))
 
 
 class FakeTextChannel:
@@ -58,7 +59,7 @@ async def test_creation() -> None:
                        "label TEXT, emoji TEXT, support_role_ids_json TEXT, questions_json TEXT)")
             db.execute("CREATE TABLE tickets (id INTEGER PRIMARY KEY, guild_id TEXT, thread_id TEXT, "
                        "panel_id INTEGER, user_id TEXT, reason_id INTEGER, priority_id INTEGER, status TEXT, "
-                       "created_at DATETIME, closed_at DATETIME)")
+                       "created_at DATETIME, closed_at DATETIME, last_warned_at DATETIME)")
             db.execute("CREATE TABLE ticket_priorities (id INTEGER PRIMARY KEY, guild_id TEXT, panel_id INTEGER, active INTEGER, "
                        "position INTEGER, label TEXT, emoji TEXT, color TEXT)")
             db.execute("CREATE TABLE ticket_first_replies (ticket_id INTEGER PRIMARY KEY, guild_id TEXT, message_id TEXT)")

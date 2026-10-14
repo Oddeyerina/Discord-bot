@@ -1,9 +1,11 @@
 """Exercise dashboard authentication, configuration, and task enqueueing."""
 
 import os
+import json
 import sqlite3
 import sys
 import tempfile
+from datetime import datetime, timezone
 from contextlib import closing
 from pathlib import Path
 
@@ -79,7 +81,7 @@ def test_api_smoke() -> None:
             assert response.json()["quickreplies"][0]["label"] == "Received"
             with closing(sqlite3.connect(database_path)) as migrated_database:
                 columns = {column[1] for column in migrated_database.execute("PRAGMA table_info(tickets)")}
-                assert {"answered_at", "pinged_at", "priority_id"} <= columns
+                assert {"answered_at", "pinged_at", "priority_id", "assigned_to", "last_warned_at"} <= columns
                 event_columns = {column[1] for column in migrated_database.execute(
                     "PRAGMA table_info(scheduled_events)")}
                 assert {"guild_id", "start_at", "message_id", "discord_event_id", "created_by"} <= event_columns
@@ -133,6 +135,39 @@ def test_api_smoke() -> None:
             assert client.post("/api/stats/resend").json()["task_id"] > 0
             assert client.get("/api/remembering/dates").json() == []
             assert client.get("/api/levels/config").json()["roles"][0]["level"] == 2
+            assert client.put("/api/levels/config", json={"voice_xp_per_minute": 7,
+                       "voice_ignored_channel_ids": ["111"]}).status_code == 200
+            assert client.get("/api/levels/config").json()["voice_xp_per_minute"] == 7
+            assert client.put("/api/moderation/config", json={"warn_kick_threshold": 2,
+                       "warn_ban_threshold": 4, "log_channel_id": "987"}).status_code == 200
+            assert client.get("/api/moderation/config").json()["warn_kick_threshold"] == 2
+            assert client.get("/api/moderation/warnings").json() == []
+            assert client.put("/api/verification/config", json={"rules_channel_id": "987",
+                       "verified_role_id": "456", "enabled": True}).status_code == 200
+            assert client.post("/api/verification/post").json()["task_id"] > 0
+            assert client.get("/api/health/detail").json()["database"] == "ok"
+            assert len(client.get("/api/audit").json()) > 0
+            with closing(sqlite3.connect(database_path)) as heartbeat_db:
+                heartbeat_db.execute("INSERT INTO app_meta (id, value) VALUES ('bot_heartbeat', ?)",
+                                     (json.dumps({"guild_id": "123456789", "members_online": 12,
+                                                  "in_voice": 3, "total_members": 50,
+                                                  "last_seen": datetime.now(timezone.utc).isoformat()}),))
+                heartbeat_db.commit()
+            summary = client.get("/api/dashboard/summary")
+            assert summary.status_code == 200, summary.text
+            assert summary.json()["tiles"]["members_online"] == 12
+            assert summary.json()["tiles"]["in_voice"] == 3
+            assert summary.json()["tiles"]["open_tickets"] == 1
+            assert len(summary.json()["chart"]) == 7
+            assert summary.json()["recent_tickets"][0]["reason"] == "Help"
+            with closing(sqlite3.connect(database_path)) as heartbeat_db:
+                heartbeat_db.execute("UPDATE app_meta SET value = ? WHERE id = 'bot_heartbeat'",
+                                     (json.dumps({"guild_id": "123456789", "members_online": 12,
+                                                  "in_voice": 3, "total_members": 50,
+                                                  "last_seen": "2020-01-01T00:00:00+00:00"}),))
+                heartbeat_db.commit()
+            stale = client.get("/api/dashboard/summary").json()["tiles"]
+            assert stale["bot_status"] == "offline" and stale["members_online"] is None
             assert client.post("/api/auth/logout").status_code == 200
             assert client.get("/api/auth/me").status_code == 401
         engine.dispose()

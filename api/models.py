@@ -85,6 +85,8 @@ class Ticket(Base):
     priority_id: Mapped[int | None] = mapped_column(ForeignKey("ticket_priorities.id"), nullable=True)
     status: Mapped[str] = mapped_column(String, default="open")
     claimed_by: Mapped[str | None] = mapped_column(String, nullable=True)
+    assigned_to: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_warned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # SQLite stores no timezone offset; treat this value as UTC on read.
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     # SQLite stores no timezone offset; treat this value as UTC on read.
@@ -94,6 +96,15 @@ class Ticket(Base):
     # SQLite stores no timezone offset; treat this value as UTC on read.
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     transcript_path: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class TicketNote(Base):
+    __tablename__ = "ticket_notes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id"), index=True)
+    author_id: Mapped[str] = mapped_column(String)
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 class TicketAutoresponse(Base):
@@ -260,6 +271,8 @@ class LevelConfig(Base):
     ignored_channel_ids_json: Mapped[str] = mapped_column(Text, default="[]")
     ignored_role_ids_json: Mapped[str] = mapped_column(Text, default="[]")
     levelup_embed_json: Mapped[str] = mapped_column(Text, default="{}")
+    voice_xp_per_minute: Mapped[int] = mapped_column(Integer, default=5)
+    voice_ignored_channel_ids_json: Mapped[str] = mapped_column(Text, default="[]")
 
 
 class LevelRole(Base):
@@ -278,6 +291,8 @@ class LevelUser(Base):
     level: Mapped[int] = mapped_column(Integer, default=0)
     # SQLite stores no timezone offset; treat this value as UTC on read.
     last_xp_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    voice_seconds_last_grant: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    messages_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class WelcomeConfig(Base):
@@ -316,3 +331,53 @@ class BotTask(Base):
     # SQLite stores no timezone offset; treat this value as UTC on read.
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class AppMeta(Base):
+    __tablename__ = "app_meta"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    guild_id: Mapped[str] = mapped_column(String, index=True)
+    actor_id: Mapped[str] = mapped_column(String)
+    action: Mapped[str] = mapped_column(String, index=True)
+    target: Mapped[str] = mapped_column(String)
+    details_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class WarningRecord(Base):
+    __tablename__ = "warnings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    guild_id: Mapped[str] = mapped_column(String, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    moderator_id: Mapped[str] = mapped_column(String)
+    reason: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class ModerationConfig(Base):
+    __tablename__ = "moderation_config"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    guild_id: Mapped[str] = mapped_column(String, unique=True)
+    warn_kick_threshold: Mapped[int] = mapped_column(Integer, default=3)
+    warn_ban_threshold: Mapped[int] = mapped_column(Integer, default=5)
+    log_channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    dm_on_warn: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class VerificationConfig(Base):
+    __tablename__ = "verification_config"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    guild_id: Mapped[str] = mapped_column(String, unique=True)
+    rules_channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    rules_message_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    rules_embed_json: Mapped[str] = mapped_column(Text, default="{}")
+    button_label: Mapped[str] = mapped_column(String, default="I agree to the rules")
+    button_custom_id: Mapped[str] = mapped_column(String, default="verify:agree")
+    verified_role_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)

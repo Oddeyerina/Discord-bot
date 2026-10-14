@@ -4,6 +4,7 @@ from discord.ext import commands
 from config import GUILD_ID
 from db import decoded, settings
 from utils.embeds import render
+from utils.safe import safe_send
 
 
 class Welcome(commands.Cog):
@@ -24,7 +25,7 @@ class Welcome(commands.Cog):
         channel = member.guild.get_channel(int(config["welcome_channel_id"])) if config["welcome_channel_id"] else None
         if isinstance(channel, discord.TextChannel):
             embed = render(decoded(config["welcome_embed_json"], {}), member.guild, member)
-            await channel.send(
+            await safe_send(channel,
                 content=member.mention,
                 embed=embed,
                 allowed_mentions=discord.AllowedMentions(everyone=False, users=[member], roles=False),
@@ -40,7 +41,7 @@ class Welcome(commands.Cog):
         channel = member.guild.get_channel(int(config["goodbye_channel_id"]))
         if isinstance(channel, discord.TextChannel):
             embed = render(decoded(config["goodbye_embed_json"], {}), member.guild, member)
-            await channel.send(
+            await safe_send(channel,
                 content=member.mention,
                 embed=embed,
                 allowed_mentions=discord.AllowedMentions(everyone=False, users=[member], roles=False),

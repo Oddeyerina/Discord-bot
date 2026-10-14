@@ -8,6 +8,7 @@ from discord.ext import commands
 from config import GUILD_ID
 from db import connect, decoded, one
 from utils.embeds import render
+from utils.safe import safe_delete, safe_send
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class Sticky(commands.Cog):
             except (discord.Forbidden, discord.HTTPException, ValueError):
                 log.exception("Could not refresh sticky in channel %s", message.channel.id)
 
-    async def post_sticky(self, channel_id: str, force: bool = False, ping_on_edit: bool = False) -> None:
+    async def post_sticky(self, channel_id: str, force: bool = False) -> None:
         async with self.locks.setdefault(channel_id, asyncio.Lock()):
             row = one("SELECT * FROM sticky_channels WHERE guild_id = ? AND channel_id = ?",
                       (str(GUILD_ID), channel_id))
@@ -42,14 +43,17 @@ class Sticky(commands.Cog):
             guild = self.bot.get_guild(GUILD_ID)
             channel = guild.get_channel(int(channel_id)) if guild else None
             if not isinstance(channel, discord.TextChannel):
-                raise ValueError("Sticky channel unavailable")
+                raise ValueError("The bot cannot access this channel. Check permissions.")
 
             if row["sticky_message_id"]:
                 try:
                     old = await channel.fetch_message(int(row["sticky_message_id"]))
-                    await old.delete()
-                except (discord.NotFound, discord.Forbidden):
+                    if not await safe_delete(old):
+                        raise ValueError("The bot cannot access this channel. Check permissions.")
+                except discord.NotFound:
                     pass
+                except discord.Forbidden as exc:
+                    raise ValueError("The bot cannot access this channel. Check permissions.") from exc
 
             role = guild.get_role(int(row["role_id"])) if row["role_id"] else None
 
@@ -62,7 +66,9 @@ class Sticky(commands.Cog):
                 allowed = discord.AllowedMentions(everyone=False, users=False, roles=True)
                 content = None
 
-            message = await channel.send(content=content, embed=embed, allowed_mentions=allowed)
+            message = await safe_send(channel, content=content, embed=embed, allowed_mentions=allowed)
+            if message is None:
+                raise ValueError("The bot cannot access this channel. Check permissions.")
 
             with connect() as db:
                 db.execute("UPDATE sticky_channels SET sticky_message_id = ?, last_sticky_at = ? WHERE id = ?",

@@ -17,10 +17,15 @@ EVENT_TYPES = ("Message only", "Discord event only", "Both")
 
 
 def parse_start(date: str, time: str) -> datetime | None:
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date) or not re.fullmatch(r"\d{2}:\d{2}", time):
+    date = date.strip()
+    time = time.strip()
+    if not re.fullmatch(r"(?:\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4})", date):
+        return None
+    if not re.fullmatch(r"(?:[01]?\d|2[0-3]):[0-5]\d", time):
         return None
     try:
-        local = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
+        date_format = "%Y-%m-%d" if "-" in date else "%d.%m.%Y"
+        local = datetime.strptime(f"{date} {time}", f"{date_format} %H:%M")
     except ValueError:
         return None
     utc = local.replace(tzinfo=BERLIN).astimezone(timezone.utc)
@@ -45,8 +50,8 @@ class Events(commands.Cog):
 
     @event.command(name="create", description="Create a community event")
     @app_commands.describe(
-        title="Event title", date="Date (YYYY-MM-DD)",
-        time="Time in Europe/Berlin (HH:MM)", description="Optional description",
+        title="Event title", date="Date (YYYY-MM-DD or DD.MM.YYYY)",
+        time="Time in Europe/Berlin (HH:MM or H:MM)", description="Optional description",
         type="How the event should be announced",
         channel="Channel to post the announcement (required for Message only and Both)",
         duration_minutes="Duration in minutes for the Discord event (only used for Discord event only and Both)")
@@ -70,7 +75,7 @@ class Events(commands.Cog):
             return
         if start is None:
             await interaction.response.send_message(
-                "Enter a valid Berlin date and time as YYYY-MM-DD and HH:MM.", ephemeral=True)
+                "Invalid date or time. Use YYYY-MM-DD and HH:MM.", ephemeral=True)
             return
         if start <= datetime.now(timezone.utc):
             await interaction.response.send_message("The event must start in the future.", ephemeral=True)

@@ -19,6 +19,8 @@ def get_config(db: Session = Depends(get_db)) -> dict:
         return {}
     return {"xp_per_message": row.xp_per_message, "cooldown_seconds": row.cooldown_seconds,
             "base_xp": row.base_xp, "multiplier": row.multiplier,
+            "voice_xp_per_minute": row.voice_xp_per_minute,
+            "voice_ignored_channel_ids": json.loads(row.voice_ignored_channel_ids_json),
             "announcement_channel_id": row.announcement_channel_id,
             "ignored_channel_ids": json.loads(row.ignored_channel_ids_json),
             "ignored_role_ids": json.loads(row.ignored_role_ids_json),
@@ -33,10 +35,11 @@ def put_config(body: LevelInput, db: Session = Depends(get_db)) -> dict:
     if row is None:
         row = LevelConfig(guild_id=guild_id())
         db.add(row)
-    for field in ("xp_per_message", "cooldown_seconds", "base_xp", "multiplier", "announcement_channel_id"):
+    for field in ("xp_per_message", "cooldown_seconds", "base_xp", "multiplier", "announcement_channel_id", "voice_xp_per_minute"):
         setattr(row, field, getattr(body, field))
     row.ignored_channel_ids_json = json.dumps(body.ignored_channel_ids)
     row.ignored_role_ids_json = json.dumps(body.ignored_role_ids)
+    row.voice_ignored_channel_ids_json = json.dumps(body.voice_ignored_channel_ids)
     row.levelup_embed_json = body.levelup_embed.model_dump_json()
     db.execute(delete(LevelRole).where(LevelRole.guild_id == guild_id()))
     db.add_all(LevelRole(guild_id=guild_id(), level=r.level, role_id=r.role_id) for r in body.roles)
@@ -46,6 +49,7 @@ def put_config(body: LevelInput, db: Session = Depends(get_db)) -> dict:
 
 @router.get("/leaderboard")
 def leaderboard(db: Session = Depends(get_db)) -> list[dict]:
-    return [{"user_id": r.user_id, "xp": r.xp, "level": r.level} for r in
+    return [{"user_id": r.user_id, "xp": r.xp, "level": r.level,
+             "messages_count": r.messages_count} for r in
             db.scalars(select(LevelUser).where(LevelUser.guild_id == guild_id())
                        .order_by(LevelUser.xp.desc()).limit(25))]

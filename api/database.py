@@ -90,6 +90,27 @@ def migrate_phase_b() -> None:
         raw.close()
 
 
+def migrate_phase_c() -> None:
+    """Add Phase C columns to existing SQLite tables without dropping data."""
+    columns = {
+        "tickets": {"assigned_to": "VARCHAR", "last_warned_at": "DATETIME"},
+        "level_config": {
+            "voice_xp_per_minute": "INTEGER NOT NULL DEFAULT 5",
+            "voice_ignored_channel_ids_json": "TEXT NOT NULL DEFAULT '[]'",
+        },
+        "level_users": {
+            "voice_seconds_last_grant": "DATETIME",
+            "messages_count": "INTEGER NOT NULL DEFAULT 0",
+        },
+    }
+    with engine.begin() as connection:
+        for table, additions in columns.items():
+            existing = {row[1] for row in connection.exec_driver_sql(f"PRAGMA table_info({table})")}
+            for name, definition in additions.items():
+                if name not in existing:
+                    connection.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+
+
 def get_db() -> Iterator[Session]:
     with SessionLocal() as session:
         yield session

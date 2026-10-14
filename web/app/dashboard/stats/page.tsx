@@ -27,11 +27,9 @@ export default function StatsPage() {
       setPostMessage(`Stats task #${result.task_id} queued.`);
     } catch (cause) { setPostError((cause as Error).message); }
   }
-  return <><header><h1 className="text-3xl font-bold">Live Server Stats</h1>
+  return <><header><h1 className="text-4xl font-bold">Live Server Stats</h1>
     <p className="text-slate-400">The bot edits one stats message at the configured interval.</p></header>
     <Status message={message || postMessage} error={error || postError} />
-    <div className="flex gap-3"><button className="secondary" disabled={busy} onClick={save}>Save</button>
-      <button className="primary" disabled={busy || !value.channel_id} onClick={postNow}>Post / Update now</button></div>
     <section className="card grid gap-4 md:grid-cols-2">
       <ChannelSelect label="Stats channel" value={value.channel_id} channels={guild.channels}
         onChange={channel_id => setValue({ ...value, channel_id })} />
@@ -40,7 +38,7 @@ export default function StatsPage() {
       <label className="flex items-center gap-2"><input type="checkbox" checked={value.enabled}
         onChange={event => setValue({ ...value, enabled: event.target.checked })} />Enabled</label>
     </section>
-    <section className="space-y-4"><div className="flex items-center justify-between"><h2 className="text-xl font-semibold">Role counters</h2>
+    <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-xl font-semibold">Role counters</h2>
       <button className="secondary" onClick={() => setValue({ ...value, role_counters: [...value.role_counters, { label: '', role_id: '' }] })}>Add counter</button></div>
       {value.role_counters.map((counter, index) => <div className="card grid gap-4 md:grid-cols-[1fr_2fr_auto]" key={index}>
         <label>Label<input value={counter.label} onChange={event => updateCounter(index, { label: event.target.value })} /></label>
@@ -49,5 +47,7 @@ export default function StatsPage() {
       </div>)}</section>
     <p className="text-sm text-slate-400">Stats placeholders: {'{total_members}'}, {'{human_members}'}, {'{bot_members}'}, {'{online}'}, {'{in_voice}'}, {'{artist_count}'}, {'{verified_count}'}, {'{booster_count}'}, {'{boost_count}'}, {'{boost_level}'}, {'{boosts_needed}'}, {'{timestamp}'}. Role counters use {'{role_count_label}'} with a lowercase label slug. Online requires Presence Intent.</p>
     <EmbedEditor title="Stats embed" value={value.embed || emptyEmbed} onChange={embed => setValue({ ...value, embed })} />
+    <div className="save-bar"><button className="secondary" disabled={busy} onClick={save}>Save</button>
+      <button className="primary" disabled={busy || !value.channel_id} onClick={postNow}>Post / Update now</button></div>
   </>;
 }

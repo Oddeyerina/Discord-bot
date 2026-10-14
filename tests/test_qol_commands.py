@@ -106,8 +106,16 @@ async def test_commands(database_path: Path) -> None:
     assert events.parse_start("2026-02-30", "20:00") is None
     assert events.parse_start("2026-03-29", "02:30") is None
     assert events.parse_start(future.strftime("%Y-%m-%d"), "20:00") is not None
+    assert events.parse_start(future.strftime("%d.%m.%Y"), "20:00") == events.parse_start(
+        future.strftime("%Y-%m-%d"), "20:00")
+    assert events.parse_start(future.strftime("%d.%m.%Y"), "7:30") is not None
+    assert events.parse_start(future.strftime("%Y-%m-%d"), "24:00") is None
 
     event_cog = events.Events(None)
+    invalid = interaction()
+    await event_cog.create.callback(event_cog, invalid, "Game night", "31.02.2026", "7:30")
+    assert invalid.response.calls[0] == (
+        "Invalid date or time. Use YYYY-MM-DD and HH:MM.", {"ephemeral": True})
     creator = interaction()
     await event_cog.create.callback(event_cog, creator, "Game night", future.strftime("%Y-%m-%d"),
                                     "20:00", "Join us", "Both", channel, 60)

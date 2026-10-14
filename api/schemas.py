@@ -65,6 +65,8 @@ class TicketRecord(BaseModel):
     priority_id: int | None
     status: str
     claimed_by: str | None
+    assigned_to: str | None
+    last_warned_at: datetime | None
     created_at: datetime
     answered_at: datetime | None
     pinged_at: datetime | None
@@ -107,6 +109,8 @@ class LevelInput(BaseModel):
     ignored_channel_ids: list[str] = Field(default_factory=list)
     ignored_role_ids: list[str] = Field(default_factory=list)
     levelup_embed: EmbedData = Field(default_factory=EmbedData)
+    voice_xp_per_minute: int = Field(default=5, ge=0, le=10000)
+    voice_ignored_channel_ids: list[str] = Field(default_factory=list)
     roles: list[LevelRoleInput] = Field(default_factory=list)
 
 
@@ -120,7 +124,7 @@ class WelcomeInput(BaseModel):
 
 class TaskInput(BaseModel):
     type: Literal["post_panel", "update_panel", "delete_panel", "sync_guild_data", "post_sticky",
-                  "resend_all_stickies", "post_stats"]
+                  "resend_all_stickies", "post_stats", "db_maintenance", "post_rules"]
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -165,3 +169,18 @@ class StatsInput(BaseModel):
     update_interval_seconds: int = Field(default=300, ge=60, le=86400)
     enabled: bool = False
     role_counters: list[RoleCounterInput] = Field(default_factory=list)
+
+
+class ModerationInput(BaseModel):
+    warn_kick_threshold: int = Field(default=3, ge=1, le=100)
+    warn_ban_threshold: int = Field(default=5, ge=1, le=100)
+    log_channel_id: str | None = None
+    dm_on_warn: bool = True
+
+
+class VerificationInput(BaseModel):
+    rules_channel_id: str | None = None
+    rules_embed: EmbedData = Field(default_factory=EmbedData)
+    button_label: str = Field(default="I agree to the rules", min_length=1, max_length=80)
+    verified_role_id: str | None = None
+    enabled: bool = False

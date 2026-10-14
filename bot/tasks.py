@@ -6,8 +6,10 @@ import discord
 
 from config import GUILD_ID
 from db import all_rows, connect, decoded, one
+from runtime import run_maintenance
 from sync import sync_guild_data
 from utils.embeds import render
+from utils.safe import safe_delete, safe_edit, safe_send
 
 log = logging.getLogger(__name__)
 
@@ -46,13 +48,16 @@ async def publish_panel(bot: discord.Client, panel_id: int) -> None:
     if panel["message_id"]:
         try:
             message = await channel.fetch_message(int(panel["message_id"]))
-            await message.edit(embed=embed, view=view)
+            if not await safe_edit(message, embed=embed, view=view):
+                raise RuntimeError("Could not update panel message")
             if panel["type"] == "reactionroles":
                 await message.clear_reactions()
         except discord.NotFound:
             message = None
     if message is None:
-        message = await channel.send(embed=embed, view=view)
+        message = await safe_send(channel, embed=embed, view=view)
+        if message is None:
+            raise RuntimeError("Could not post panel message")
         with connect() as db:
             db.execute("UPDATE panels SET message_id = ? WHERE id = ?", (str(message.id), panel_id))
     if panel["type"] == "reactionroles" and decoded(panel["extra_config_json"], {}).get("style") == "reaction":
@@ -76,7 +81,8 @@ async def delete_panel(bot: discord.Client, panel_id: int) -> None:
     if isinstance(channel, discord.TextChannel):
         try:
             message = await channel.fetch_message(int(panel["message_id"]))
-            await message.delete()
+            if not await safe_delete(message):
+                raise RuntimeError("Could not delete panel message")
         except discord.NotFound:
             pass
     with connect() as db:
@@ -117,12 +123,19 @@ async def process_tasks(bot: discord.Client) -> None:
                         rows = all_rows("SELECT channel_id FROM sticky_channels WHERE guild_id = ? AND enabled = 1",
                                         (str(GUILD_ID),))
                         for row in rows:
-                            await cog.post_sticky(row["channel_id"], force=True, ping_on_edit=True)
+                            await cog.post_sticky(row["channel_id"], force=True)
                     elif task["type"] == "post_stats":
                         cog = bot.get_cog("Stats")
                         if cog is None:
                             raise RuntimeError("Stats cog unavailable")
                         await cog.post_stats(force=True)
+                    elif task["type"] == "post_rules":
+                        cog = bot.get_cog("Verification")
+                        if cog is None:
+                            raise RuntimeError("Verification cog unavailable")
+                        await cog.post_rules(resend=bool(decoded(task["payload_json"], {}).get("resend")))
+                    elif task["type"] == "db_maintenance":
+                        await asyncio.to_thread(run_maintenance)
                     else:
                         raise ValueError("Unknown task type")
                 except Exception as exc:
