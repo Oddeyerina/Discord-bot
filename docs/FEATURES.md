@@ -44,11 +44,11 @@ The dashboard is the setup interface. Member slash commands are for using featur
 
 ## Sticky Messages
 
-- **What it does:** Reposts an embed after channel activity so it stays near the bottom.
+- **What it does:** Pins an embed and edits that message in place after channel activity.
 - **Where to configure it:** `/dashboard/sticky` for each channel, embed, cooldown, and optional role ping.
 - **How to use it in Discord:** Use **Sticky now** for one channel or **Resend all stickies** to refresh every enabled channel.
 - **Required permissions:** View Channels, Send Messages, Embed Links, Manage Messages, and permission to mention the configured role.
-- **Notes / limitations:** `{role}` inserts the selected role mention. One role field currently controls both insertion and pinging.
+- **Notes / limitations:** `{role}` inserts the selected role mention. The initial post and manual **Resend all stickies** can ping that role; automatic edits do not. If the message is deleted, the bot posts and pins a replacement. If the channel pin limit is reached, the message still posts. One role field currently controls both insertion and pinging.
 
 ## Temp Voice
 

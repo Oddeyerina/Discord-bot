@@ -20,14 +20,16 @@ def render(template: dict[str, Any], guild: discord.Guild | None = None,
                         lambda match: values.get(match.group(1), match.group(0)), value)
         if guild is None:
             return result
-        channels = {channel.name.casefold(): channel.mention for channel in
-                    [*getattr(guild, "text_channels", []), *getattr(guild, "forum_channels", [])]}
-        roles = {guild_role.name.casefold(): guild_role.mention for guild_role in getattr(guild, "roles", [])
-                 if guild_role.name != "@everyone"}
-        result = re.sub(r"(?<![\w<])#([A-Za-z0-9_-]+)",
-                        lambda match: channels.get(match.group(1).casefold(), match.group(0)), result)
-        return re.sub(r"(?<![\w<])@([A-Za-z0-9_-]+)",
-                      lambda match: roles.get(match.group(1).casefold(), match.group(0)), result)
+        channels = [*getattr(guild, "text_channels", []), *getattr(guild, "forum_channels", [])]
+        for channel in sorted(channels, key=lambda item: len(item.name), reverse=True):
+            result = re.sub(re.escape(f"#{channel.name}"), f"<#{channel.id}>", result,
+                            flags=re.IGNORECASE)
+        for guild_role in sorted(getattr(guild, "roles", []), key=lambda item: len(item.name),
+                                 reverse=True):
+            if guild_role.name != "@everyone":
+                result = re.sub(re.escape(f"@{guild_role.name}"), f"<@&{guild_role.id}>",
+                                result, flags=re.IGNORECASE)
+        return result
 
     raw_color = template.get("color", "#5865F2")
     try:

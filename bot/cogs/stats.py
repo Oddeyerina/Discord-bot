@@ -27,8 +27,10 @@ def stats_values(guild: discord.Guild, role_counters: list[dict]) -> dict[str, s
         "total_members": str(guild.member_count or len(members)),
         "human_members": str(sum(not member.bot for member in members)),
         "bot_members": str(sum(member.bot for member in members)),
-        "online": str(sum(member.status != discord.Status.offline for member in members)),
-        "in_voice": str(sum(member.voice is not None and member.voice.channel is not None for member in members)),
+        "online": str(sum(not member.bot and member.status != discord.Status.offline
+                          for member in members)),
+        "in_voice": str(sum(not member.bot and member.voice is not None and
+                            member.voice.channel is not None for member in members)),
         "booster_count": str(len(guild.premium_subscribers)),
         "boost_count": str(count), "boost_level": str(level),
         "boosts_needed": str(max(0, thresholds[level] - count) if level < 3 else 0),

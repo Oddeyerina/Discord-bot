@@ -22,19 +22,20 @@ def test_stats() -> None:
     online = SimpleNamespace(bot=False, status=discord.Status.online, voice=None, roles=[artist])
     offline = SimpleNamespace(bot=False, status=discord.Status.offline,
                               voice=SimpleNamespace(channel=object()), roles=[])
-    bot_member = SimpleNamespace(bot=True, status=discord.Status.online, voice=None, roles=[])
+    bot_member = SimpleNamespace(bot=True, status=discord.Status.online,
+                                 voice=SimpleNamespace(channel=object()), roles=[])
     guild = SimpleNamespace(
         name="Test Server", member_count=3, members=[online, offline, bot_member],
         premium_subscription_count=1, premium_tier=1, premium_subscribers=[],
         get_role=lambda role_id: artist if role_id == 123 else None,
-        text_channels=[SimpleNamespace(name="general", mention="<#456>")],
+        text_channels=[SimpleNamespace(name="general", id=456, mention="<#456>")],
         forum_channels=[], roles=[artist],
     )
     values = stats_values(guild, [{"label": "Artists", "role_id": "123"}])
     assert values["total_members"] == "3"
     assert values["human_members"] == "2"
     assert values["bot_members"] == "1"
-    assert values["online"] == "2"
+    assert values["online"] == "1"
     assert values["in_voice"] == "1"
     assert values["artist_count"] == "1"
     assert values["role_count_artists"] == "1"

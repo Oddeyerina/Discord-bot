@@ -117,7 +117,7 @@ async def process_tasks(bot: discord.Client) -> None:
                         rows = all_rows("SELECT channel_id FROM sticky_channels WHERE guild_id = ? AND enabled = 1",
                                         (str(GUILD_ID),))
                         for row in rows:
-                            await cog.post_sticky(row["channel_id"], force=True)
+                            await cog.post_sticky(row["channel_id"], force=True, ping_on_edit=True)
                     elif task["type"] == "post_stats":
                         cog = bot.get_cog("Stats")
                         if cog is None:

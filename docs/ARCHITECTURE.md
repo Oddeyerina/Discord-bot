@@ -14,7 +14,7 @@ If support roles change while tickets are open, the API keeps the original reaso
 
 ## Added features
 
-- Sticky Messages store channel, optional mention role, embed, and cooldown in `sticky_channels`. The bot refreshes a sticky after new human messages; **Sticky now** queues a `post_sticky` task. The current message ID and last post time are runtime fields.
+- Sticky Messages store channel, optional mention role, embed, and cooldown in `sticky_channels`. The first post is pinned and its message ID is saved. Later activity edits that message in place after the cooldown, with mentions disabled so the role is not pinged again. If the message is missing, the bot posts and pins a replacement. A failed pin (including a full pin list) is logged, but the message remains posted. **Sticky now** queues a `post_sticky` task; **Resend all stickies** refreshes every enabled sticky and can ping its configured role. The current message ID and last edit time are runtime fields.
 - Temp Voice stores hub settings in `tempvoice_config` and created channels with their owners in `tempvoice_active`. Joining the hub creates a private voice channel and moves the member; an empty temporary channel is removed. Members use the guild-scoped `/tempvoice` commands in the configured control text channel while connected to their temporary voice channel. Renaming preserves a leading emoji. The owner can rename it, change its user limit, lock or unlock public access, and delete it. A connected member can claim ownership only after the current owner leaves; the bot transfers the channel permission overwrite and updates `owner_id`.
 - Sticky Roles records a departing member's assignable roles in `sticky_roles_saved` and restores valid roles on rejoin, excluding configured roles. The saved row remains for future joins.
 - Remembering Dates are entered by members with `/birthday set`, `/birthday remove`, and `/birthday list`. A daily 08:00 UTC check uses the configured IANA timezone and `remembered_announcements` to avoid duplicate posts for the same local day. Announcement embeds support `{user}`, `{label}`, and `{age}` when a year is stored. A label-specific embed overrides the default when configured. February 29 is announced only in leap years.
@@ -31,7 +31,7 @@ Temporary voice owners use `/tempvoice name <name>` (new channel name, 1–100 c
 
 The command tree's global error handler logs unhandled slash-command exceptions and sends ephemeral feedback, including cooldown and permission errors. It uses a follow-up if the command has already acknowledged the interaction.
 
-The Stats cog reads `stats_config`, counts members, voice activity, boosts, and configured roles, and edits an existing stats embed on its configured interval. Missing messages are recreated. `{online}` requires Presence Intent. Stats placeholders include `{total_members}`, `{human_members}`, `{bot_members}`, `{online}`, `{in_voice}`, `{artist_count}`, `{verified_count}`, `{booster_count}`, `{boost_count}`, `{boost_level}`, `{boosts_needed}`, `{timestamp}`, and `{role_count_<label_slug>}`. Embed title, description, and footer also resolve matching `#channelname` and `@rolename` references after normal placeholder substitution. `resend_all_stickies` forces a refresh of all enabled sticky messages.
+The Stats cog reads `stats_config`, counts members, voice activity, boosts, and configured roles, and edits an existing stats embed on its configured interval. Missing messages are recreated. `{online}` counts online humans and requires Presence Intent; `{in_voice}` also excludes bots. Stats placeholders include `{total_members}`, `{human_members}`, `{bot_members}`, `{online}`, `{in_voice}`, `{artist_count}`, `{verified_count}`, `{booster_count}`, `{boost_count}`, `{boost_level}`, `{boosts_needed}`, `{timestamp}`, and `{role_count_<label_slug>}`. Embed title, description, and footer also resolve matching `#channelname` and `@rolename` references after normal placeholder substitution. `resend_all_stickies` forces a refresh of all enabled sticky messages.
 
 The API owns feature configuration through authenticated routes. The bot writes runtime rows and timestamps through the shared SQLite file. Voice channels and categories are included in guild data sync for dashboard dropdowns.
 
@@ -44,5 +44,6 @@ Tables include `guild_id` so the schema can support more than one server later. 
 3. Add a cog in `bot/cogs/` and load it from `bot/main.py`. Read settings from SQLite. Use `bot_tasks` when a dashboard action must be executed in Discord.
 4. Add a dashboard page under `web/app/dashboard/` and a navigation entry in `web/lib/navigation.ts`. Reuse `useConfig`, dropdowns, and `EmbedEditor`.
 5. Document permissions, settings, and behavior. Introduce migrations before changing tables in an existing deployment; SQLAlchemy's initial schema creation does not alter existing tables.
+
 
 
