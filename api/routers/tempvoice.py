@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/tempvoice", tags=["tempvoice"])
 def get_config(db: Session = Depends(get_db)) -> dict:
     row = db.scalar(select(TempVoiceConfig).where(TempVoiceConfig.guild_id == guild_id()))
     return {} if row is None else {key: getattr(row, key) for key in
-        ("hub_channel_id", "category_id", "name_template", "user_limit", "enabled")}
+        ("hub_channel_id", "category_id", "control_channel_id", "name_template", "user_limit", "enabled")}
 
 
 @router.put("/config")

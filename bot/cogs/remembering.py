@@ -133,7 +133,9 @@ class Remembering(commands.Cog):
                 continue
             age = local_today.year - row["date_year"] if row["date_year"] else None
             try:
-                embed = render(decoded(config["announcement_embed_json"], {}), guild, user, label=row["label"], age=age)
+                templates = decoded(config["label_embed_json"], {})
+                template = templates.get(row["label"], decoded(config["announcement_embed_json"], {}))
+                embed = render(template, guild, user, label=row["label"], age=age)
                 await channel.send(
                     content=user.mention,
                     embed=embed,

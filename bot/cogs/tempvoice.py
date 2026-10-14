@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import re
+import unicodedata
 from datetime import datetime, timezone
 
 import discord
@@ -10,6 +12,18 @@ from config import GUILD_ID
 from db import connect, one, settings
 
 log = logging.getLogger(__name__)
+
+
+def emoji_prefix(channel_name: str) -> str:
+    prefix = channel_name.split(" ", 1)[0]
+    if re.fullmatch(r"<a?:[A-Za-z0-9_]+:\d+>", prefix):
+        return prefix
+    if any(unicodedata.category(character) == "So" for character in prefix) and all(
+        unicodedata.category(character) in {"So", "Sk", "Mn", "Me"} or character == "\u200d"
+        for character in prefix
+    ):
+        return prefix
+    return ""
 
 
 class TempVoice(commands.Cog):
@@ -24,18 +38,22 @@ class TempVoice(commands.Cog):
     async def current_channel(self, interaction: discord.Interaction,
                               owner_only: bool = True) -> tuple[discord.VoiceChannel, dict] | None:
         guild = interaction.guild
-        channel = guild.get_channel(interaction.channel_id) if guild and interaction.channel_id else None
-        if interaction.guild_id != GUILD_ID or not isinstance(channel, discord.VoiceChannel):
-            await interaction.response.send_message("Use this command in a temporary voice channel.", ephemeral=True)
+        config = settings("tempvoice_config")
+        if (interaction.guild_id != GUILD_ID or not config or not config["control_channel_id"] or
+                str(interaction.channel_id) != config["control_channel_id"]):
+            await interaction.response.send_message(
+                "Please use this command in the configured control channel.", ephemeral=True)
+            return None
+        voice = getattr(interaction.user, "voice", None)
+        channel = voice.channel if voice else None
+        if not isinstance(channel, discord.VoiceChannel) or guild is None or channel.guild.id != guild.id:
+            await interaction.response.send_message(
+                "Join a temporary voice channel before using its commands.", ephemeral=True)
             return None
         active = one("SELECT * FROM tempvoice_active WHERE guild_id = ? AND channel_id = ?",
                      (str(GUILD_ID), str(channel.id)))
         if active is None:
             await interaction.response.send_message("This is not a temporary voice channel.", ephemeral=True)
-            return None
-        voice = getattr(interaction.user, "voice", None)
-        if voice is None or voice.channel is None or voice.channel.id != channel.id:
-            await interaction.response.send_message("Join this voice channel before using its commands.", ephemeral=True)
             return None
         if owner_only and str(interaction.user.id) != active["owner_id"]:
             await interaction.response.send_message("Only the channel owner can do that.", ephemeral=True)
@@ -53,6 +71,10 @@ class TempVoice(commands.Cog):
             await interaction.response.send_message("The name must contain 1 to 100 characters.", ephemeral=True)
             return
         channel, _ = context
+        prefix = emoji_prefix(channel.name)
+        if prefix:
+            name = name.removeprefix(f"{prefix} ").strip()
+            name = f"{prefix} {name}"[:100]
         try:
             await channel.edit(name=name, reason=f"Temporary voice owner {interaction.user.id} renamed channel")
         except discord.HTTPException:

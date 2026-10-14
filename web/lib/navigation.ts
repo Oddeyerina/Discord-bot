@@ -9,4 +9,5 @@ export const pages = [
   { href: '/dashboard/tempvoice', label: 'Temp Voice' },
   { href: '/dashboard/sticky-roles', label: 'Sticky Roles' },
   { href: '/dashboard/remembering', label: 'Remembering Dates' },
+  { href: '/dashboard/stats', label: 'Live Server Stats' },
 ];

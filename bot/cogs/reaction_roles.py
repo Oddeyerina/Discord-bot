@@ -12,7 +12,8 @@ class ReactionRoles(commands.Cog):
     async def handle_reaction(self, payload: discord.RawReactionActionEvent, add: bool) -> None:
         if payload.guild_id != GUILD_ID:
             return
-        panel = one("SELECT * FROM panels WHERE guild_id = ? AND type = 'reactionroles' AND message_id = ?",
+        panel = one("SELECT * FROM panels WHERE guild_id = ? AND type = 'reactionroles' "
+                    "AND active = 1 AND message_id = ?",
                     (str(GUILD_ID), str(payload.message_id)))
         if not panel or decoded(panel["extra_config_json"], {}).get("style", "reaction") != "reaction":
             return
@@ -50,6 +51,12 @@ class ReactionRoles(commands.Cog):
         if not custom_id.startswith("roles:select:") or not isinstance(interaction.user, discord.Member):
             return
         panel_id = int(custom_id.rsplit(":", 1)[1])
+        panel = one("SELECT id FROM panels WHERE id = ? AND guild_id = ? AND type = 'reactionroles' "
+                    "AND active = 1 AND message_id = ?",
+                    (panel_id, str(GUILD_ID), str(interaction.message.id) if interaction.message else ""))
+        if panel is None:
+            await interaction.response.send_message("This role panel is no longer available.", ephemeral=True)
+            return
         rows = all_rows("SELECT * FROM reaction_roles WHERE panel_id = ?", (panel_id,))
         selected = set(interaction.data.get("values", []))
         for row in rows:

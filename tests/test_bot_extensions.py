@@ -21,9 +21,9 @@ async def test_extensions() -> None:
     bot = SuiteBot()
     for cog in ("tickets", "honeypot", "reaction_roles", "levels", "welcome",
                 "sticky", "tempvoice", "stickyroles", "remembering", "help", "info",
-                "poll", "events"):
+                "poll", "events", "stats"):
         await bot.load_extension(f"cogs.{cog}")
-    assert len(bot.cogs) == 13
+    assert len(bot.cogs) == 14
     guild_commands = {command.name: command for command in bot.tree.get_commands(guild=discord.Object(id=123456789))}
     assert {"birthday", "rank", "leaderboard", "tempvoice", "help", "userinfo",
             "serverinfo", "poll", "event"} == guild_commands.keys()
@@ -57,7 +57,7 @@ async def test_extensions() -> None:
     poll_options = {option["name"]: option for option in guild_commands["poll"].to_dict(bot.tree)["options"]}
     assert len([name for name in poll_options if name.startswith("option")]) == 10
     assert [choice["value"] for choice in poll_options["duration"]["choices"]] == [
-        15, 60, 240, 480, 1440, 4320, 10080]
+        60, 240, 480, 1440, 4320, 10080]
     create = guild_commands["event"].get_command("create")
     create_options = {option["name"]: option for option in create.to_dict(bot.tree)["options"]}
     assert set(create_options) == {"title", "date", "time", "description", "type", "channel",
@@ -74,7 +74,7 @@ async def test_extensions() -> None:
     help_cog = bot.get_cog("Help")
     await help_cog.help_command.callback(
         help_cog, SimpleNamespace(response=SimpleNamespace(send_message=show_help)))
-    assert shown[0]["ephemeral"] is True
+    assert shown[0].get("ephemeral") is not True
     help_embed = shown[0]["embed"]
     assert {field.name for field in help_embed.fields} == {
         "Levels", "Birthdays", "Voice", "Community", "Info"}

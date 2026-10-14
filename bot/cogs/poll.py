@@ -40,10 +40,6 @@ class Polls(commands.Cog):
         if any(not 1 <= len(answer) <= 55 for answer in answers):
             await interaction.response.send_message("Each answer must contain 1 to 55 characters.", ephemeral=True)
             return
-        if duration == 15:
-            await interaction.response.send_message(
-                "Discord's native polls require at least one hour. Choose a longer duration.", ephemeral=True)
-            return
         poll = discord.Poll(question, timedelta(minutes=duration), multiple=multi)
         for answer in answers:
             poll.add_answer(text=answer)

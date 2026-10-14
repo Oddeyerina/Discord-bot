@@ -17,10 +17,10 @@ class Welcome(commands.Cog):
         config = settings("welcome_config")
         if not config:
             return
-        if config["autorole_id"]:
-            role = member.guild.get_role(int(config["autorole_id"]))
-            if role:
-                await member.add_roles(role, reason="Auto role")
+        roles = [role for role_id in decoded(config["autorole_ids_json"], [])
+                 if (role := member.guild.get_role(int(role_id))) is not None]
+        if roles:
+            await member.add_roles(*roles, reason="Auto roles")
         channel = member.guild.get_channel(int(config["welcome_channel_id"])) if config["welcome_channel_id"] else None
         if isinstance(channel, discord.TextChannel):
             embed = render(decoded(config["welcome_embed_json"], {}), member.guild, member)

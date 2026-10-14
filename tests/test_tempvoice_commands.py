@@ -76,6 +76,8 @@ async def test_commands() -> None:
         import cogs.tempvoice as tempvoice
 
         with closing(sqlite3.connect(database_path)) as db:
+            db.execute("CREATE TABLE tempvoice_config (guild_id TEXT, control_channel_id TEXT)")
+            db.execute("INSERT INTO tempvoice_config VALUES ('123456789', '123')")
             db.execute("CREATE TABLE tempvoice_active (id INTEGER PRIMARY KEY, guild_id TEXT, "
                        "channel_id TEXT, owner_id TEXT, created_at DATETIME)")
             db.execute("INSERT INTO tempvoice_active VALUES (1, '123456789', '777', '888', '')")
@@ -91,9 +93,11 @@ async def test_commands() -> None:
             channel.members = [owner, guest]
             channel.overwrites[owner] = discord.PermissionOverwrite(manage_channels=True)
             guild = SimpleNamespace(default_role=default_role,
+                                    id=123456789,
                                     get_channel=lambda channel_id: channel if channel_id == 777 else None)
+            channel.guild = guild
 
-            def interaction(user: FakeUser, channel_id: int = 777) -> SimpleNamespace:
+            def interaction(user: FakeUser, channel_id: int = 123) -> SimpleNamespace:
                 response = FakeResponse()
                 return SimpleNamespace(guild_id=123456789, guild=guild, channel_id=channel_id,
                                        user=user, response=response,
@@ -105,15 +109,16 @@ async def test_commands() -> None:
             assert outsider.response.messages == ["Only the channel owner can do that."]
             assert channel.name == "Temporary"
 
-            elsewhere = interaction(owner, channel_id=123)
+            elsewhere = interaction(owner, channel_id=777)
             await cog.rename.callback(cog, elsewhere, "New name")
-            assert elsewhere.response.messages == ["Use this command in a temporary voice channel."]
+            assert elsewhere.response.messages == ["Please use this command in the configured control channel."]
 
             too_long = interaction(owner)
             await cog.rename.callback(cog, too_long, "x" * 101)
             assert "1 to 100" in too_long.response.messages[0]
+            channel.name = "🔊 Temporary"
             await cog.rename.callback(cog, interaction(owner), "New name")
-            assert channel.name == "New name"
+            assert channel.name == "🔊 New name"
 
             invalid_limit = interaction(owner)
             await cog.limit.callback(cog, invalid_limit, 100)

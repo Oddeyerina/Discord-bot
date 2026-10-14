@@ -20,7 +20,7 @@ def get_config(db: Session = Depends(get_db)) -> dict:
             "welcome_embed": json.loads(row.welcome_embed_json),
             "goodbye_channel_id": row.goodbye_channel_id,
             "goodbye_embed": json.loads(row.goodbye_embed_json),
-            "autorole_id": row.autorole_id}
+            "autorole_ids": json.loads(row.autorole_ids_json or "[]")}
 
 
 @router.put("/config")
@@ -33,6 +33,6 @@ def put_config(body: WelcomeInput, db: Session = Depends(get_db)) -> dict:
     row.welcome_embed_json = body.welcome_embed.model_dump_json()
     row.goodbye_channel_id = body.goodbye_channel_id
     row.goodbye_embed_json = body.goodbye_embed.model_dump_json()
-    row.autorole_id = body.autorole_id
+    row.autorole_ids_json = json.dumps(body.autorole_ids)
     db.commit()
     return get_config(db)

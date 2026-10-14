@@ -40,11 +40,12 @@ class Panel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     guild_id: Mapped[str] = mapped_column(String, index=True)
     type: Mapped[str] = mapped_column(String)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
     channel_id: Mapped[str] = mapped_column(String)
     message_id: Mapped[str | None] = mapped_column(String, nullable=True)
     embed_json: Mapped[str] = mapped_column(Text, default="{}")
     extra_config_json: Mapped[str] = mapped_column(Text, default="{}")
-    __table_args__ = (UniqueConstraint("guild_id", "type"),)
 
 
 class TicketReason(Base):
@@ -65,6 +66,7 @@ class TicketPriority(Base):
     __tablename__ = "ticket_priorities"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     guild_id: Mapped[str] = mapped_column(String, index=True)
+    panel_id: Mapped[int | None] = mapped_column(ForeignKey("panels.id"), nullable=True)
     label: Mapped[str] = mapped_column(String)
     emoji: Mapped[str | None] = mapped_column(String, nullable=True)
     color: Mapped[str] = mapped_column(String, default="#5865F2")
@@ -109,6 +111,7 @@ class TicketQuickreply(Base):
     __tablename__ = "ticket_quickreplies"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     guild_id: Mapped[str] = mapped_column(String, index=True)
+    panel_id: Mapped[int | None] = mapped_column(ForeignKey("panels.id"), nullable=True)
     label: Mapped[str] = mapped_column(String)
     response_text: Mapped[str] = mapped_column(Text)
     position: Mapped[int] = mapped_column(Integer, default=0)
@@ -141,6 +144,7 @@ class TempVoiceConfig(Base):
     guild_id: Mapped[str] = mapped_column(String, unique=True)
     hub_channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
     category_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    control_channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
     name_template: Mapped[str] = mapped_column(String, default="🔊 {user}'s channel")
     user_limit: Mapped[int] = mapped_column(Integer, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -179,6 +183,7 @@ class RememberedDatesConfig(Base):
     guild_id: Mapped[str] = mapped_column(String, unique=True)
     channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
     announcement_embed_json: Mapped[str] = mapped_column(Text, default="{}")
+    label_embed_json: Mapped[str] = mapped_column(Text, default="{}")
     timezone: Mapped[str] = mapped_column(String, default="Europe/Berlin")
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -283,7 +288,20 @@ class WelcomeConfig(Base):
     welcome_embed_json: Mapped[str] = mapped_column(Text, default="{}")
     goodbye_channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
     goodbye_embed_json: Mapped[str] = mapped_column(Text, default="{}")
-    autorole_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    autorole_ids_json: Mapped[str] = mapped_column(Text, default="[]")
+
+
+class StatsConfig(Base):
+    __tablename__ = "stats_config"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    guild_id: Mapped[str] = mapped_column(String, unique=True)
+    channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    message_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    embed_json: Mapped[str] = mapped_column(Text, default="{}")
+    update_interval_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    role_counters_json: Mapped[str] = mapped_column(Text, default="[]")
+    last_updated: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class BotTask(Base):

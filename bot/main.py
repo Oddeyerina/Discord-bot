@@ -20,6 +20,7 @@ class SuiteBot(commands.Bot):
         intents.members = True
         intents.message_content = True
         intents.reactions = True
+        intents.presences = True
         super().__init__(command_prefix=commands.when_mentioned, intents=intents)
         self.tasks_started = False
         self.tree.on_error = self.on_app_command_error
@@ -45,7 +46,7 @@ class SuiteBot(commands.Bot):
     async def setup_hook(self) -> None:
         for cog in ("tickets", "honeypot", "reaction_roles", "levels", "welcome",
                     "sticky", "tempvoice", "stickyroles", "remembering", "help", "info",
-                    "poll", "events"):
+                    "poll", "events", "stats"):
             await self.load_extension(f"cogs.{cog}")
         await self.tree.sync(guild=discord.Object(id=GUILD_ID))
 

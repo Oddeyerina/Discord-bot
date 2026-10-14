@@ -7,15 +7,27 @@ import discord
 def render(template: dict[str, Any], guild: discord.Guild | None = None,
            user: discord.abc.User | None = None, level: int | None = None,
            label: str = "", age: int | None = None,
-           role: discord.Role | None = None) -> discord.Embed:
+           role: discord.Role | None = None,
+           stats: dict[str, str] | None = None) -> discord.Embed:
     values = {"user": user.mention if user else "", "guild": guild.name if guild else "",
               "membercount": str(guild.member_count or 0) if guild else "0",
               "level": str(level or 0), "label": label, "age": str(age) if age is not None else "",
               "role": role.mention if role else ""}
+    values.update(stats or {})
 
     def expand(value: str) -> str:
-        return re.sub(r"\{(user|guild|membercount|level|label|age|role)\}",
-                      lambda match: values[match.group(1)], value)
+        result = re.sub(r"\{([a-z][a-z0-9_]*)\}",
+                        lambda match: values.get(match.group(1), match.group(0)), value)
+        if guild is None:
+            return result
+        channels = {channel.name.casefold(): channel.mention for channel in
+                    [*getattr(guild, "text_channels", []), *getattr(guild, "forum_channels", [])]}
+        roles = {guild_role.name.casefold(): guild_role.mention for guild_role in getattr(guild, "roles", [])
+                 if guild_role.name != "@everyone"}
+        result = re.sub(r"(?<![\w<])#([A-Za-z0-9_-]+)",
+                        lambda match: channels.get(match.group(1).casefold(), match.group(0)), result)
+        return re.sub(r"(?<![\w<])@([A-Za-z0-9_-]+)",
+                      lambda match: roles.get(match.group(1).casefold(), match.group(0)), result)
 
     raw_color = template.get("color", "#5865F2")
     try:

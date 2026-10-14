@@ -19,6 +19,7 @@ def get_config(db: Session = Depends(get_db)) -> dict:
     if row is None:
         return {}
     return {"channel_id": row.channel_id, "announcement_embed": json.loads(row.announcement_embed_json),
+            "label_embeds": json.loads(row.label_embed_json or "{}"),
             "timezone": row.timezone, "enabled": row.enabled}
 
 
@@ -34,6 +35,7 @@ def put_config(body: RememberingInput, db: Session = Depends(get_db)) -> dict:
         db.add(row)
     row.channel_id = body.channel_id or None
     row.announcement_embed_json = body.announcement_embed.model_dump_json()
+    row.label_embed_json = json.dumps({label: embed.model_dump() for label, embed in body.label_embeds.items()})
     row.timezone = body.timezone
     row.enabled = body.enabled
     db.commit()

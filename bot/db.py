@@ -35,7 +35,7 @@ def all_rows(sql: str, args: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
 
 def settings(table: str) -> dict[str, Any] | None:
     if table not in {"honeypot_config", "level_config", "welcome_config", "tempvoice_config",
-                     "sticky_roles_config", "remembered_dates_config"}:
+                     "sticky_roles_config", "remembered_dates_config", "stats_config"}:
         raise ValueError("Unknown settings table")
     return one(f"SELECT * FROM {table} WHERE guild_id = ?", (str(GUILD_ID),))
 

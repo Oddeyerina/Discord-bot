@@ -28,7 +28,7 @@ class Info(commands.Cog):
         embed.add_field(name="Roles", value=str(max(len(member.roles) - 1, 0)) if member else "0")
         embed.add_field(name="Account type", value="Bot" if target.bot else "User")
         embed.set_thumbnail(url=target.display_avatar.url)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="serverinfo", description="Show information about this server")
     @app_commands.guilds(discord.Object(id=GUILD_ID))

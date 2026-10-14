@@ -14,6 +14,7 @@ class EmbedData(BaseModel):
 
 
 class PanelInput(BaseModel):
+    name: str | None = Field(default=None, max_length=100)
     channel_id: str
     embed: EmbedData
     extra_config: dict[str, Any] = Field(default_factory=dict)
@@ -114,11 +115,12 @@ class WelcomeInput(BaseModel):
     welcome_embed: EmbedData = Field(default_factory=EmbedData)
     goodbye_channel_id: str | None = None
     goodbye_embed: EmbedData = Field(default_factory=EmbedData)
-    autorole_id: str | None = None
+    autorole_ids: list[str] = Field(default_factory=list)
 
 
 class TaskInput(BaseModel):
-    type: Literal["post_panel", "update_panel", "sync_guild_data", "post_sticky"]
+    type: Literal["post_panel", "update_panel", "delete_panel", "sync_guild_data", "post_sticky",
+                  "resend_all_stickies", "post_stats"]
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -133,6 +135,7 @@ class StickyInput(BaseModel):
 class TempVoiceInput(BaseModel):
     hub_channel_id: str | None = None
     category_id: str | None = None
+    control_channel_id: str | None = None
     name_template: str = Field(default="🔊 {user}'s channel", min_length=1, max_length=100)
     user_limit: int = Field(default=0, ge=0, le=99)
     enabled: bool = False
@@ -146,5 +149,19 @@ class StickyRolesInput(BaseModel):
 class RememberingInput(BaseModel):
     channel_id: str | None = None
     announcement_embed: EmbedData = Field(default_factory=EmbedData)
+    label_embeds: dict[str, EmbedData] = Field(default_factory=dict)
     timezone: str = "Europe/Berlin"
     enabled: bool = False
+
+
+class RoleCounterInput(BaseModel):
+    label: str = Field(min_length=1, max_length=50)
+    role_id: str
+
+
+class StatsInput(BaseModel):
+    channel_id: str | None = None
+    embed: EmbedData = Field(default_factory=EmbedData)
+    update_interval_seconds: int = Field(default=300, ge=60, le=86400)
+    enabled: bool = False
+    role_counters: list[RoleCounterInput] = Field(default_factory=list)

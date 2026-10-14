@@ -43,6 +43,52 @@ class Tickets(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._done_locks: dict[int, asyncio.Lock] = {}
+        self._cleanup_task: asyncio.Task | None = None
+
+    @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        if self._cleanup_task is None or self._cleanup_task.done():
+            self._cleanup_task = asyncio.create_task(self.cleanup_loop())
+
+    async def cog_unload(self) -> None:
+        if self._cleanup_task is not None:
+            self._cleanup_task.cancel()
+
+    async def thread_exists(self, guild: discord.Guild, thread_id: str) -> bool:
+        if guild.get_thread(int(thread_id)) is not None:
+            return True
+        try:
+            return await guild.fetch_channel(int(thread_id)) is not None
+        except discord.NotFound:
+            return False
+        except discord.HTTPException:
+            log.exception("Could not check ticket thread %s", thread_id)
+            return True
+
+    async def clean_stale_rows(self, guild: discord.Guild, rows: list[dict]) -> list[dict]:
+        active = []
+        for row in rows:
+            if await self.thread_exists(guild, row["thread_id"]):
+                active.append(row)
+                continue
+            with connect() as db:
+                db.execute("UPDATE tickets SET status = 'closed', closed_at = ? "
+                           "WHERE id = ? AND status = 'open'",
+                           (datetime.now(timezone.utc).isoformat(), row["id"]))
+            log.info("Closed stale ticket %s because thread %s is gone", row["id"], row["thread_id"])
+        return active
+
+    async def cleanup_loop(self) -> None:
+        while not self.bot.is_closed():
+            try:
+                guild = self.bot.get_guild(GUILD_ID)
+                if guild is not None:
+                    rows = all_rows("SELECT id, thread_id FROM tickets WHERE guild_id = ? AND status = 'open'",
+                                    (str(GUILD_ID),))
+                    await self.clean_stale_rows(guild, rows)
+            except Exception:
+                log.exception("Stale ticket cleanup failed")
+            await asyncio.sleep(3600)
 
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction) -> None:
@@ -74,6 +120,11 @@ class Tickets(commands.Cog):
 
     async def open_picker(self, interaction: discord.Interaction, custom_id: str) -> None:
         panel_id = int(custom_id.rsplit(":", 1)[1])
+        panel = one("SELECT id FROM panels WHERE id = ? AND guild_id = ? AND type = 'tickets' AND active = 1",
+                    (panel_id, str(GUILD_ID)))
+        if panel is None:
+            await interaction.response.send_message("This ticket panel is no longer available.", ephemeral=True)
+            return
         rows = all_rows("SELECT * FROM ticket_reasons WHERE panel_id = ? AND active = 1 ORDER BY position LIMIT 25", (panel_id,))
         if not rows:
             await interaction.response.send_message("No ticket reasons are configured.", ephemeral=True)
@@ -95,8 +146,8 @@ class Tickets(commands.Cog):
         if custom_id.startswith("ticket:priority-create:"):
             _, _, panel_text, reason_text = custom_id.split(":")
             panel_id, reason_id, priority_id = int(panel_text), int(reason_text), int(values[0])
-            priority = one("SELECT id FROM ticket_priorities WHERE id = ? AND guild_id = ? AND active = 1",
-                           (priority_id, str(GUILD_ID)))
+            priority = one("SELECT id FROM ticket_priorities WHERE id = ? AND guild_id = ? "
+                           "AND panel_id = ? AND active = 1", (priority_id, str(GUILD_ID), panel_id))
             if priority is None:
                 await interaction.response.send_message("That priority is no longer available.", ephemeral=True)
                 return
@@ -104,13 +155,14 @@ class Tickets(commands.Cog):
             panel_id, reason_id = int(custom_id.rsplit(":", 1)[1]), int(values[0])
         reason = one("SELECT * FROM ticket_reasons WHERE id = ? AND panel_id = ? AND active = 1",
                      (reason_id, panel_id))
-        selected_panel = one("SELECT * FROM panels WHERE id = ? AND guild_id = ?", (panel_id, str(GUILD_ID)))
+        selected_panel = one("SELECT * FROM panels WHERE id = ? AND guild_id = ? "
+                             "AND type = 'tickets' AND active = 1", (panel_id, str(GUILD_ID)))
         if reason is None or selected_panel is None or not interaction.guild:
             await interaction.response.send_message("This ticket option is no longer available.", ephemeral=True)
             return
         if priority_id is None:
-            priorities = all_rows("SELECT * FROM ticket_priorities WHERE guild_id = ? AND active = 1 ORDER BY position LIMIT 25",
-                                  (str(GUILD_ID),))
+            priorities = all_rows("SELECT * FROM ticket_priorities WHERE guild_id = ? AND panel_id = ? "
+                                  "AND active = 1 ORDER BY position LIMIT 25", (str(GUILD_ID), panel_id))
             if priorities:
                 options = [discord.SelectOption(label=p["label"], value=str(p["id"]),
                                                 emoji=p["emoji"] or None) for p in priorities]
@@ -124,9 +176,11 @@ class Tickets(commands.Cog):
             await interaction.response.send_message("The ticket channel is unavailable.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
-        existing = one("SELECT thread_id FROM tickets WHERE guild_id = ? AND user_id = ? "
-                       "AND reason_id = ? AND status = 'open' LIMIT 1",
-                       (str(GUILD_ID), str(interaction.user.id), reason["id"]))
+        open_rows = all_rows("SELECT id, thread_id, reason_id FROM tickets WHERE guild_id = ? "
+                             "AND user_id = ? AND status = 'open'",
+                             (str(GUILD_ID), str(interaction.user.id)))
+        active_rows = await self.clean_stale_rows(interaction.guild, open_rows)
+        existing = next((row for row in active_rows if row["reason_id"] == reason["id"]), None)
         if existing:
             await interaction.followup.send(f"You already have an open ticket: <#{existing['thread_id']}>", ephemeral=True)
             return
@@ -147,7 +201,10 @@ class Tickets(commands.Cog):
             await interaction.followup.send("This reason has too many support members for a private thread.", ephemeral=True)
             return
         pattern = decoded(selected_panel["extra_config_json"], {}).get("thread_name_pattern", "ticket-{username}")
-        name = pattern.replace("{username}", interaction.user.name).replace("{user}", interaction.user.name)[:100]
+        name = pattern.replace("{username}", interaction.user.name).replace("{user}", interaction.user.name)
+        if reason["emoji"]:
+            name = f"{reason['emoji']} {name}"
+        name = name[:100]
         thread: discord.Thread | None = None
         try:
             thread = await channel.create_thread(name=name, type=discord.ChannelType.private_thread,
@@ -214,8 +271,8 @@ class Tickets(commands.Cog):
         if ticket is None or not self.allowed(interaction, ticket):
             await interaction.response.send_message("Only support staff can change priority.", ephemeral=True)
             return
-        priorities = all_rows("SELECT * FROM ticket_priorities WHERE guild_id = ? AND active = 1 ORDER BY position LIMIT 25",
-                              (str(GUILD_ID),))
+        priorities = all_rows("SELECT * FROM ticket_priorities WHERE guild_id = ? AND panel_id = ? "
+                              "AND active = 1 ORDER BY position LIMIT 25", (str(GUILD_ID), ticket["panel_id"]))
         if not priorities:
             await interaction.response.send_message("No priorities are configured.", ephemeral=True)
             return
@@ -233,8 +290,9 @@ class Tickets(commands.Cog):
         if ticket is None or ticket["thread_id"] != str(interaction.channel_id) or not self.allowed(interaction, ticket) or not interaction.data.get("values"):
             await interaction.response.send_message("This priority change is unavailable.", ephemeral=True)
             return
-        priority = one("SELECT * FROM ticket_priorities WHERE id = ? AND guild_id = ? AND active = 1",
-                       (int(interaction.data["values"][0]), str(GUILD_ID)))
+        priority = one("SELECT * FROM ticket_priorities WHERE id = ? AND guild_id = ? "
+                       "AND panel_id = ? AND active = 1",
+                       (int(interaction.data["values"][0]), str(GUILD_ID), ticket["panel_id"]))
         if priority is None or not isinstance(interaction.channel, discord.Thread):
             await interaction.response.send_message("Priority unavailable.", ephemeral=True)
             return
@@ -263,8 +321,8 @@ class Tickets(commands.Cog):
         if ticket is None or not self.allowed(interaction, ticket):
             await interaction.response.send_message("Only support staff can use quick replies.", ephemeral=True)
             return
-        replies = all_rows("SELECT * FROM ticket_quickreplies WHERE guild_id = ? ORDER BY position LIMIT 25",
-                           (str(GUILD_ID),))
+        replies = all_rows("SELECT * FROM ticket_quickreplies WHERE guild_id = ? AND panel_id = ? "
+                           "ORDER BY position LIMIT 25", (str(GUILD_ID), ticket["panel_id"]))
         if not replies:
             await interaction.response.send_message("No quick replies are configured.", ephemeral=True)
             return
@@ -280,8 +338,8 @@ class Tickets(commands.Cog):
         if ticket is None or ticket["thread_id"] != str(interaction.channel_id) or not self.allowed(interaction, ticket) or not interaction.data.get("values"):
             await interaction.response.send_message("Quick reply unavailable.", ephemeral=True)
             return
-        reply = one("SELECT response_text FROM ticket_quickreplies WHERE id = ? AND guild_id = ?",
-                    (int(interaction.data["values"][0]), str(GUILD_ID)))
+        reply = one("SELECT response_text FROM ticket_quickreplies WHERE id = ? AND guild_id = ? "
+                    "AND panel_id = ?", (int(interaction.data["values"][0]), str(GUILD_ID), ticket["panel_id"]))
         if reply is None or not isinstance(interaction.channel, discord.Thread):
             await interaction.response.send_message("Quick reply unavailable.", ephemeral=True)
             return
@@ -386,6 +444,7 @@ class Tickets(commands.Cog):
         path = transcript_dir / f"ticket-{ticket['id']}.txt"
         path.write_text(transcript, encoding="utf-8")
         selected_panel = one("SELECT extra_config_json FROM panels WHERE id = ?", (ticket["panel_id"],))
+        reason = one("SELECT label FROM ticket_reasons WHERE id = ?", (ticket["reason_id"],))
         log_id = decoded(selected_panel["extra_config_json"], {}).get("transcript_channel_id") if selected_panel else None
         log_channel = interaction.guild.get_channel(int(log_id)) if log_id and interaction.guild else None
         if isinstance(log_channel, discord.TextChannel):

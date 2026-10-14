@@ -52,3 +52,12 @@ def post_now(channel_id: str, db: Session = Depends(get_db)) -> dict[str, int]:
     if row is None:
         raise HTTPException(404, "Sticky channel not configured")
     return {"task_id": enqueue(db, "post_sticky", {"channel_id": channel_id}).id}
+
+
+@router.post("/resend-all")
+def resend_all(db: Session = Depends(get_db)) -> dict[str, int]:
+    enabled = db.scalar(select(StickyChannel.id).where(
+        StickyChannel.guild_id == guild_id(), StickyChannel.enabled.is_(True)).limit(1))
+    if enabled is None:
+        raise HTTPException(400, "No enabled sticky channels are configured")
+    return {"task_id": enqueue(db, "resend_all_stickies", {}).id}

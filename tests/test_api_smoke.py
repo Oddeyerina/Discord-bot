@@ -28,6 +28,15 @@ def test_api_smoke() -> None:
                 "panel_id INTEGER, user_id TEXT, reason_id INTEGER, status TEXT, claimed_by TEXT, "
                 "created_at DATETIME, closed_at DATETIME, transcript_path TEXT)"
             )
+            old_database.execute(
+                "CREATE TABLE panels (id INTEGER PRIMARY KEY, guild_id VARCHAR NOT NULL, type VARCHAR NOT NULL, "
+                "channel_id VARCHAR NOT NULL, message_id VARCHAR, embed_json TEXT, extra_config_json TEXT, "
+                "UNIQUE (guild_id, type))"
+            )
+            old_database.execute(
+                "INSERT INTO panels VALUES (7, '123456789', 'tickets', '987', '555', '{}', '{}')"
+            )
+            old_database.commit()
         sys.path.insert(0, str(Path(__file__).parents[1] / "api"))
         from main import app
         from database import engine
@@ -57,6 +66,13 @@ def test_api_smoke() -> None:
                       "quickreplies": [{"label": "Received", "response_text": "We are looking into it."}]}
             response = client.put("/api/tickets/config", json=config)
             assert response.status_code == 200, response.text
+            assert response.json()["id"] == 7
+            assert response.json()["message_id"] == "555"
+            second = client.post("/api/tickets/config", json={**config, "name": "Verification"})
+            assert second.status_code == 200, second.text
+            assert second.json()["id"] != 7
+            assert len(client.get("/api/tickets/config").json()) == 2
+            assert client.post(f"/api/panels/tickets/{second.json()['id']}/publish").status_code == 200
             assert response.json()["reasons"][0]["label"] == "Help"
             assert response.json()["priorities"][0]["label"] == "High"
             assert response.json()["autoresponses"][0]["trigger_keyword"] == "billing"
@@ -93,18 +109,28 @@ def test_api_smoke() -> None:
             assert response.status_code == 200, response.text
             assert client.get("/api/tasks").json()[0]["status"] == "pending"
             assert client.put("/api/honeypot/config", json={"channel_id": "987", "action": "kick"}).status_code == 200
-            assert client.put("/api/reaction-roles/config", json={"channel_id": "987", "embed": {},
-                       "mappings": [{"emoji": "✅", "role_id": "456"}]}).status_code == 200
+            reaction = {"channel_id": "987", "embed": {}, "mappings": [{"emoji": "✅", "role_id": "456"}]}
+            assert client.put("/api/reaction-roles/config", json=reaction).status_code == 200
+            assert client.post("/api/reaction-roles/config", json={**reaction, "name": "Colors"}).status_code == 200
+            assert len(client.get("/api/reaction-roles/config").json()) == 2
             assert client.put("/api/levels/config", json={"roles": [{"level": 2, "role_id": "456"}]}).status_code == 200
-            assert client.put("/api/welcome/config", json={"autorole_id": "456"}).status_code == 200
+            assert client.put("/api/welcome/config", json={"autorole_ids": ["456"]}).status_code == 200
+            assert client.get("/api/welcome/config").json()["autorole_ids"] == ["456"]
             assert client.put("/api/sticky/config", json={"channels": [{"channel_id": "987", "role_id": "456",
                            "sticky_embed": {"title": "Notice"}}]}).status_code == 200
             assert client.post("/api/sticky/post/987").json()["task_id"] > 0
-            assert client.put("/api/tempvoice/config", json={"hub_channel_id": "111", "enabled": True}).status_code == 200
+            assert client.post("/api/sticky/resend-all").json()["task_id"] > 0
+            assert client.put("/api/tempvoice/config", json={"hub_channel_id": "111", "control_channel_id": "987", "enabled": True}).status_code == 200
+            assert client.get("/api/tempvoice/config").json()["control_channel_id"] == "987"
             assert client.put("/api/sticky-roles/config", json={"excluded_role_ids": ["456"],
                            "enabled": True}).status_code == 200
             assert client.put("/api/remembering/config", json={"channel_id": "987",
-                           "timezone": "Europe/Berlin"}).status_code == 200
+                           "timezone": "Europe/Berlin", "label_embeds": {"Birthday": {"title": "Happy Birthday"}}}).status_code == 200
+            assert client.get("/api/remembering/config").json()["label_embeds"]["Birthday"]["title"] == "Happy Birthday"
+            assert client.put("/api/stats/config", json={"channel_id": "987", "enabled": True,
+                           "role_counters": [{"label": "Artists", "role_id": "456"}]}).status_code == 200
+            assert client.get("/api/stats/config").json()["role_counters"][0]["label"] == "Artists"
+            assert client.post("/api/stats/resend").json()["task_id"] > 0
             assert client.get("/api/remembering/dates").json() == []
             assert client.get("/api/levels/config").json()["roles"][0]["level"] == 2
             assert client.post("/api/auth/logout").status_code == 200

@@ -139,9 +139,6 @@ async def test_commands(database_path: Path) -> None:
         assert db.execute("SELECT id FROM scheduled_events").fetchone() is None
 
     poll_cog = poll.Polls()
-    short_poll = interaction()
-    await poll_cog.poll.callback(poll_cog, short_poll, "Question?", "Yes", "No", duration=15)
-    assert "at least one hour" in short_poll.response.calls[0][0]
     valid_poll = interaction()
     await poll_cog.poll.callback(poll_cog, valid_poll, "Question?", "Yes", "No")
     assert isinstance(valid_poll.response.calls[0][1]["poll"], discord.Poll)

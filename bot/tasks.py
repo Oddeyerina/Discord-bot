@@ -30,7 +30,8 @@ def make_view(panel: dict, guild: discord.Guild) -> discord.ui.View | None:
 
 
 async def publish_panel(bot: discord.Client, panel_id: int) -> None:
-    panel = one("SELECT * FROM panels WHERE id = ? AND guild_id = ?", (panel_id, str(GUILD_ID)))
+    panel = one("SELECT * FROM panels WHERE id = ? AND guild_id = ? AND active = 1",
+                (panel_id, str(GUILD_ID)))
     if panel is None:
         raise ValueError("Panel not found")
     guild = bot.get_guild(GUILD_ID)
@@ -66,6 +67,22 @@ async def publish_panel(bot: discord.Client, panel_id: int) -> None:
                 log.warning("Skipping invalid emoji %r for panel %s", emoji, panel_id)
 
 
+async def delete_panel(bot: discord.Client, panel_id: int) -> None:
+    panel = one("SELECT * FROM panels WHERE id = ? AND guild_id = ?", (panel_id, str(GUILD_ID)))
+    if panel is None or not panel["message_id"]:
+        return
+    guild = bot.get_guild(GUILD_ID)
+    channel = guild.get_channel(int(panel["channel_id"])) if guild else None
+    if isinstance(channel, discord.TextChannel):
+        try:
+            message = await channel.fetch_message(int(panel["message_id"]))
+            await message.delete()
+        except discord.NotFound:
+            pass
+    with connect() as db:
+        db.execute("UPDATE panels SET message_id = NULL WHERE id = ?", (panel_id,))
+
+
 async def process_tasks(bot: discord.Client) -> None:
     with connect() as db:
         db.execute("UPDATE bot_tasks SET status = 'pending' WHERE guild_id = ? AND status = 'running'",
@@ -84,6 +101,8 @@ async def process_tasks(bot: discord.Client) -> None:
                 try:
                     if task["type"] in ("post_panel", "update_panel"):
                         await publish_panel(bot, int(decoded(task["payload_json"], {})["panel_id"]))
+                    elif task["type"] == "delete_panel":
+                        await delete_panel(bot, int(decoded(task["payload_json"], {})["panel_id"]))
                     elif task["type"] == "sync_guild_data":
                         await sync_guild_data(bot)
                     elif task["type"] == "post_sticky":
@@ -91,6 +110,19 @@ async def process_tasks(bot: discord.Client) -> None:
                         if cog is None:
                             raise RuntimeError("Sticky cog unavailable")
                         await cog.post_sticky(str(decoded(task["payload_json"], {})["channel_id"]), force=True)
+                    elif task["type"] == "resend_all_stickies":
+                        cog = bot.get_cog("Sticky")
+                        if cog is None:
+                            raise RuntimeError("Sticky cog unavailable")
+                        rows = all_rows("SELECT channel_id FROM sticky_channels WHERE guild_id = ? AND enabled = 1",
+                                        (str(GUILD_ID),))
+                        for row in rows:
+                            await cog.post_sticky(row["channel_id"], force=True)
+                    elif task["type"] == "post_stats":
+                        cog = bot.get_cog("Stats")
+                        if cog is None:
+                            raise RuntimeError("Stats cog unavailable")
+                        await cog.post_stats(force=True)
                     else:
                         raise ValueError("Unknown task type")
                 except Exception as exc:
