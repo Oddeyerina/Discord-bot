@@ -95,6 +95,9 @@ async def test_extensions() -> None:
     assert {command["name"] for command in synced_payload} == guild_commands.keys()
     await bot.close()
 
+    from test_moderation_native import check_actions
+    await check_actions()
+
 
 if __name__ == "__main__":
     asyncio.run(test_extensions())

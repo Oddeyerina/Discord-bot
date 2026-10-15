@@ -38,6 +38,14 @@ def test_api_smoke() -> None:
             old_database.execute(
                 "INSERT INTO panels VALUES (7, '123456789', 'tickets', '987', '555', '{}', '{}')"
             )
+            old_database.execute(
+                "CREATE TABLE moderation_config (id INTEGER PRIMARY KEY, guild_id TEXT UNIQUE, "
+                "warn_kick_threshold INTEGER, warn_ban_threshold INTEGER, "
+                "log_channel_id TEXT, dm_on_warn BOOLEAN)"
+            )
+            old_database.execute(
+                "INSERT INTO moderation_config VALUES (1, '123456789', 3, 5, '987', 1)"
+            )
             old_database.commit()
         sys.path.insert(0, str(Path(__file__).parents[1] / "api"))
         from main import app
@@ -85,6 +93,9 @@ def test_api_smoke() -> None:
                 event_columns = {column[1] for column in migrated_database.execute(
                     "PRAGMA table_info(scheduled_events)")}
                 assert {"guild_id", "start_at", "message_id", "discord_event_id", "created_by"} <= event_columns
+                moderation_columns = {column[1] for column in migrated_database.execute(
+                    "PRAGMA table_info(moderation_config)")}
+                assert "log_mod_actions" in moderation_columns
                 migrated_database.execute(
                     "INSERT INTO tickets (guild_id, thread_id, panel_id, user_id, reason_id, status, created_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -141,6 +152,9 @@ def test_api_smoke() -> None:
             assert client.put("/api/moderation/config", json={"warn_kick_threshold": 2,
                        "warn_ban_threshold": 4, "log_channel_id": "987"}).status_code == 200
             assert client.get("/api/moderation/config").json()["warn_kick_threshold"] == 2
+            assert client.get("/api/moderation/config").json()["log_mod_actions"] is True
+            assert client.put("/api/moderation/config", json={"log_mod_actions": False}).status_code == 200
+            assert client.get("/api/moderation/config").json()["log_mod_actions"] is False
             assert client.get("/api/moderation/warnings").json() == []
             assert client.put("/api/verification/config", json={"rules_channel_id": "987",
                        "verified_role_id": "456", "enabled": True}).status_code == 200

@@ -102,6 +102,7 @@ def migrate_phase_c() -> None:
             "voice_seconds_last_grant": "DATETIME",
             "messages_count": "INTEGER NOT NULL DEFAULT 0",
         },
+        "moderation_config": {"log_mod_actions": "BOOLEAN NOT NULL DEFAULT 1"},
     }
     with engine.begin() as connection:
         for table, additions in columns.items():

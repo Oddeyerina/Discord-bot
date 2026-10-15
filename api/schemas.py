@@ -176,6 +176,7 @@ class ModerationInput(BaseModel):
     warn_ban_threshold: int = Field(default=5, ge=1, le=100)
     log_channel_id: str | None = None
     dm_on_warn: bool = True
+    log_mod_actions: bool = True
 
 
 class VerificationInput(BaseModel):

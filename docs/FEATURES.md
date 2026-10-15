@@ -131,6 +131,7 @@ Stats embeds additionally support `{total_members}`, `{human_members}`, `{bot_me
 | Server Members Intent | Private ticket support membership, join and leave features, stats |
 | Message Content Intent | XP, honeypot messages, sticky activity, ticket auto responses |
 | Presence Intent | Online member stats |
+| View Audit Log | Identifying native Discord kicks, bans, unbans, and timeout moderators |
 | Moderate Members, Kick Members, Ban Members | Moderation commands and warning thresholds |
 
 ## Dashboard pages
@@ -166,7 +167,7 @@ After a web rebuild, open Tickets, Reaction Roles, and Sticky Messages. Open a s
 ## Phase C additions
 
 - **Tickets:** Support staff can assign or unassign tickets, add notes, and view notes privately. Notes are also posted without pings inside the private thread, so thread members can read them. The dashboard configures warning and closure times for inactivity. The close log includes relative dates, duration, assignee, and priority.
-- **Moderation:** `/warn`, `/warns`, `/clearwarns`, `/mute`, `/unmute`, `/ban`, `/kick`, `/slowmode`, `/lock`, and `/unlock` reply ephemerally. Warning thresholds can trigger kick or ban and send an embed to the configured log channel.
+- **Moderation:** `/warn`, `/warns`, `/clearwarns`, `/mute`, `/unmute`, `/ban`, `/kick`, `/slowmode`, `/lock`, and `/unlock` reply ephemerally. Warning thresholds can trigger kick or ban and send an embed to the configured log channel. With **Log native Discord moderation actions** enabled (the default), the bot also records kicks, bans, unbans, and timeout changes made through Discord's UI. It checks recent audit log entries to identify the moderator and distinguish kicks from voluntary leaves. If it cannot read the audit log, it warns in the bot logs and posts an embed with an unknown moderator; a member departure cannot then be reliably distinguished from a kick.
 - **Rules verification:** The dashboard publishes an editable rules embed with a persistent agreement button. `/post-rules` works for administrators in the rules channel.
 - **Levels:** Voice XP is granted per minute when at least two humans share an eligible voice channel. `/stats [user]`, `/leaderboard xp`, and `/leaderboard messages` expose member progress.
 - **Stability:** The overview displays API, database, and bot health. The bot requeues interrupted tasks, runs daily SQLite maintenance, and the dashboard records successful changes in its audit log. `scripts/backup-db.sh` creates online backups.

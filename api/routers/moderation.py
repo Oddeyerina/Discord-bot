@@ -19,7 +19,8 @@ def get_config(db: Session = Depends(get_db)) -> dict:
         return {}
     return {"warn_kick_threshold": row.warn_kick_threshold,
             "warn_ban_threshold": row.warn_ban_threshold,
-            "log_channel_id": row.log_channel_id, "dm_on_warn": row.dm_on_warn}
+            "log_channel_id": row.log_channel_id, "dm_on_warn": row.dm_on_warn,
+            "log_mod_actions": row.log_mod_actions}
 
 
 @router.put("/config")
@@ -28,7 +29,8 @@ def put_config(body: ModerationInput, db: Session = Depends(get_db)) -> dict:
     if row is None:
         row = ModerationConfig(guild_id=guild_id())
         db.add(row)
-    for field in ("warn_kick_threshold", "warn_ban_threshold", "log_channel_id", "dm_on_warn"):
+    for field in ("warn_kick_threshold", "warn_ban_threshold", "log_channel_id",
+                  "dm_on_warn", "log_mod_actions"):
         setattr(row, field, getattr(body, field))
     db.commit()
     return get_config(db)

@@ -368,6 +368,7 @@ class ModerationConfig(Base):
     warn_ban_threshold: Mapped[int] = mapped_column(Integer, default=5)
     log_channel_id: Mapped[str | None] = mapped_column(String, nullable=True)
     dm_on_warn: Mapped[bool] = mapped_column(Boolean, default=True)
+    log_mod_actions: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class VerificationConfig(Base):
