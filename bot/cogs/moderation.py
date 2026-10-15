@@ -83,8 +83,8 @@ class Moderation(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
-        old = before.communication_disabled_until
-        new = after.communication_disabled_until
+        old = before.timed_out_until
+        new = after.timed_out_until
         if old == new:
             return
         now = datetime.now(timezone.utc)
