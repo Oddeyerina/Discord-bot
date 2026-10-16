@@ -94,6 +94,7 @@ def migrate_phase_c() -> None:
     """Add Phase C columns to existing SQLite tables without dropping data."""
     columns = {
         "tickets": {"assigned_to": "VARCHAR", "last_warned_at": "DATETIME"},
+        "ticket_priorities": {"emoji": "VARCHAR"},
         "level_config": {
             "voice_xp_per_minute": "INTEGER NOT NULL DEFAULT 5",
             "voice_ignored_channel_ids_json": "TEXT NOT NULL DEFAULT '[]'",

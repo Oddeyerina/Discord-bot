@@ -63,11 +63,22 @@ async def check_actions() -> None:
     assert len(reports) == 2, "Bot-authored audit entries are already logged by commands"
 
     entry.user = moderator
-    before = SimpleNamespace(guild=guild, id=user.id, communication_disabled_until=None)
+    before = SimpleNamespace(guild=guild, id=user.id, timed_out_until=None)
     after = SimpleNamespace(guild=guild, id=user.id,
-                            communication_disabled_until=datetime(2099, 1, 1, tzinfo=timezone.utc))
+                            timed_out_until=datetime(2099, 1, 1, tzinfo=timezone.utc))
+    await cog.on_member_update(before, before)
+    assert len(reports) == 2, "Unchanged timeout state must not be logged"
+
+    async def timeout_entry(_guild: object, action: object, target: object) -> tuple[object, bool]:
+        assert action == moderation.discord.AuditLogAction.member_update
+        assert target.id == after.id
+        return entry, True
+
+    cog.audit_action = timeout_entry
     await cog.on_member_update(before, after)
     assert reports[-1][1] == "Member timed out"
+    await cog.on_member_update(after, before)
+    assert reports[-1][1] == "Timeout removed"
 
 
 if __name__ == "__main__":

@@ -22,14 +22,14 @@ class Moderation(commands.Cog):
         self._recent_actions: dict[tuple[int, str, int], datetime] = {}
 
     def remember_action(self, guild: discord.Guild, action: str, user: discord.abc.User) -> None:
-        now = datetime.now(timezone.utc)
+        now = discord.utils.utcnow()
         self._recent_actions = {key: seen for key, seen in self._recent_actions.items()
                                 if now - seen < timedelta(seconds=30)}
         self._recent_actions[(guild.id, action, user.id)] = now
 
     def already_logged(self, guild: discord.Guild, action: str, user: discord.abc.User) -> bool:
         seen = self._recent_actions.get((guild.id, action, user.id))
-        return seen is not None and datetime.now(timezone.utc) - seen < timedelta(seconds=30)
+        return seen is not None and discord.utils.utcnow() - seen < timedelta(seconds=30)
 
     async def audit_action(self, guild: discord.Guild, action: discord.AuditLogAction,
                            user: discord.abc.User) -> tuple[discord.AuditLogEntry | None, bool]:
@@ -40,7 +40,7 @@ class Moderation(commands.Cog):
                 target = entry.target
                 if target is None or target.id != user.id:
                     continue
-                if abs((datetime.now(timezone.utc) - entry.created_at).total_seconds()) <= 10:
+                if abs((discord.utils.utcnow() - entry.created_at).total_seconds()) <= 10:
                     return entry, True
         except (discord.Forbidden, discord.HTTPException):
             log.warning("Could not read moderation audit log in guild %s", guild.id, exc_info=True)
@@ -87,7 +87,7 @@ class Moderation(commands.Cog):
         new = after.timed_out_until
         if old == new:
             return
-        now = datetime.now(timezone.utc)
+        now = discord.utils.utcnow()
         if new is not None and new > now:
             action, title = "timeout", "Member timed out"
         elif old is not None and old > now:

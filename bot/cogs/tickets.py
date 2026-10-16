@@ -49,6 +49,10 @@ def done_view(disabled: bool = False) -> discord.ui.View:
     return view
 
 
+def priority_label(priority: dict) -> str:
+    return f"{priority['emoji']} {priority['label']}" if priority.get("emoji") else priority["label"]
+
+
 def assignment_field(embed: discord.Embed, assigned_to: str | None,
                      claimed_by: str | None) -> None:
     for index in reversed(range(len(embed.fields))):
@@ -291,6 +295,7 @@ class Tickets(commands.Cog):
             name = f"{reason['emoji']} {name}"
         name = name[:100]
         thread: discord.Thread | None = None
+        notified_at: str | None = None
         try:
             thread = await channel.create_thread(name=name, type=discord.ChannelType.private_thread,
                                                  auto_archive_duration=1440)
@@ -300,20 +305,30 @@ class Tickets(commands.Cog):
             embed = discord.Embed(title="Ticket", description=f"Opened by {interaction.user.mention}\nReason: {reason['label']}",
                                   timestamp=datetime.now(timezone.utc), color=0x5865F2)
             if priority_id is not None:
-                selected_priority = one("SELECT label, color FROM ticket_priorities WHERE id = ?", (priority_id,))
+                selected_priority = one("SELECT label, emoji, color FROM ticket_priorities WHERE id = ?", (priority_id,))
                 if selected_priority:
-                    embed.add_field(name="Priority", value=selected_priority["label"])
+                    embed.add_field(name="Priority", value=priority_label(selected_priority))
                     try:
                         embed.color = discord.Color(int(selected_priority["color"].lstrip("#"), 16))
                     except ValueError:
                         pass
             if await safe_send(thread, embed=embed, view=ticket_view(decoded(selected_panel["extra_config_json"], {}))) is None:
                 raise RuntimeError("Could not post ticket info")
-            for question in decoded(reason["questions_json"], []):
-                if await safe_send(thread, content=str(question)) is None:
-                    raise RuntimeError("Could not post ticket question")
-            if await safe_send(thread, content="When you have answered the questions, click Done to notify support.", view=done_view()) is None:
-                raise RuntimeError("Could not post Done button")
+            questions = [str(question) for question in decoded(reason["questions_json"], []) if str(question).strip()]
+            if questions:
+                questions_embed = discord.Embed(
+                    title="Please answer the following questions",
+                    description="\n".join(f"{index}. {question}" for index, question in enumerate(questions, 1)),
+                    color=0x5865F2,
+                )
+                if await safe_send(thread, embed=questions_embed, view=done_view()) is None:
+                    raise RuntimeError("Could not post ticket questions")
+            else:
+                mentions = " ".join(role.mention for role in roles)
+                if await safe_send(thread, content=f"{mentions} A new ticket is ready for review.",
+                                   allowed_mentions=discord.AllowedMentions(everyone=False, users=False, roles=roles)) is None:
+                    raise RuntimeError("Could not notify support")
+                notified_at = datetime.now(timezone.utc).isoformat()
         except (discord.HTTPException, RuntimeError):
             log.exception("Could not create private ticket for user %s", interaction.user.id)
             if thread is not None:
@@ -324,10 +339,11 @@ class Tickets(commands.Cog):
             await interaction.followup.send("The private ticket could not be created. Please try again.", ephemeral=True)
             return
         with connect() as db:
-            db.execute("INSERT INTO tickets (guild_id, thread_id, panel_id, user_id, reason_id, priority_id, status, created_at) "
-                       "VALUES (?, ?, ?, ?, ?, ?, 'open', ?)",
+            db.execute("INSERT INTO tickets (guild_id, thread_id, panel_id, user_id, reason_id, priority_id, "
+                       "status, created_at, answered_at, pinged_at) "
+                       "VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)",
                        (str(GUILD_ID), str(thread.id), panel_id, str(interaction.user.id), reason["id"], priority_id,
-                        datetime.now(timezone.utc).isoformat()))
+                        datetime.now(timezone.utc).isoformat(), notified_at, notified_at))
         await interaction.followup.send(f"Your ticket is ready: {thread.mention}", ephemeral=True)
 
     @commands.Cog.listener()
@@ -393,10 +409,10 @@ class Tickets(commands.Cog):
             embed = message.embeds[0]
             for index, field in enumerate(embed.fields):
                 if field.name == "Priority":
-                    embed.set_field_at(index, name="Priority", value=priority["label"])
+                    embed.set_field_at(index, name="Priority", value=priority_label(priority))
                     break
             else:
-                embed.add_field(name="Priority", value=priority["label"])
+                embed.add_field(name="Priority", value=priority_label(priority))
             embed.color = discord.Color(int(priority["color"].lstrip("#"), 16))
             if not await safe_edit(message, embed=embed):
                 raise RuntimeError("Could not edit ticket priority")
@@ -633,7 +649,7 @@ class Tickets(commands.Cog):
             opened_at = datetime.fromisoformat(ticket["created_at"])
             if opened_at.tzinfo is None:
                 opened_at = opened_at.replace(tzinfo=timezone.utc)
-            priority = (one("SELECT label FROM ticket_priorities WHERE id = ?",
+            priority = (one("SELECT label, emoji FROM ticket_priorities WHERE id = ?",
                             (ticket["priority_id"],)) if ticket.get("priority_id") else None)
             embed = discord.Embed(
                 title=f"Ticket #{ticket['id']} closed",
@@ -651,7 +667,7 @@ class Tickets(commands.Cog):
             embed.add_field(name="Closed at", value=f"<t:{int(closed_at.timestamp())}:R>")
             embed.add_field(name="Duration", value=str(closed_at - opened_at).split(".")[0])
             if priority:
-                embed.add_field(name="Priority", value=priority["label"])
+                embed.add_field(name="Priority", value=priority_label(priority))
             embed.set_footer(text="Transcript attached below")
             await safe_send(log_channel,
                 embed=embed,

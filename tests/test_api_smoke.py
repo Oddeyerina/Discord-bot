@@ -44,6 +44,10 @@ def test_api_smoke() -> None:
                 "log_channel_id TEXT, dm_on_warn BOOLEAN)"
             )
             old_database.execute(
+                "CREATE TABLE ticket_priorities (id INTEGER PRIMARY KEY, guild_id TEXT, "
+                "panel_id INTEGER, label TEXT, color TEXT, position INTEGER, active BOOLEAN)"
+            )
+            old_database.execute(
                 "INSERT INTO moderation_config VALUES (1, '123456789', 3, 5, '987', 1)"
             )
             old_database.commit()
@@ -71,7 +75,7 @@ def test_api_smoke() -> None:
             config = {"channel_id": "987", "embed": {"title": "Tickets"},
                       "extra_config": {"thread_name_pattern": "ticket-{username}"},
                       "reasons": [{"label": "Help", "questions": ["What happened?"]}],
-                      "priorities": [{"label": "High", "color": "#ff0000"}],
+                      "priorities": [{"label": "High", "emoji": "🔥", "color": "#ff0000"}],
                       "autoresponses": [{"trigger_keyword": "billing", "response_text": "Check your receipt."}],
                       "quickreplies": [{"label": "Received", "response_text": "We are looking into it."}]}
             response = client.put("/api/tickets/config", json=config)
@@ -85,6 +89,7 @@ def test_api_smoke() -> None:
             assert client.post(f"/api/panels/tickets/{second.json()['id']}/publish").status_code == 200
             assert response.json()["reasons"][0]["label"] == "Help"
             assert response.json()["priorities"][0]["label"] == "High"
+            assert response.json()["priorities"][0]["emoji"] == "🔥"
             assert response.json()["autoresponses"][0]["trigger_keyword"] == "billing"
             assert response.json()["quickreplies"][0]["label"] == "Received"
             with closing(sqlite3.connect(database_path)) as migrated_database:
@@ -96,6 +101,9 @@ def test_api_smoke() -> None:
                 moderation_columns = {column[1] for column in migrated_database.execute(
                     "PRAGMA table_info(moderation_config)")}
                 assert "log_mod_actions" in moderation_columns
+                priority_columns = {column[1] for column in migrated_database.execute(
+                    "PRAGMA table_info(ticket_priorities)")}
+                assert "emoji" in priority_columns
                 migrated_database.execute(
                     "INSERT INTO tickets (guild_id, thread_id, panel_id, user_id, reason_id, status, created_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
